@@ -291,4 +291,47 @@ on "ProjectA".
 
 ###Configuring project examples
 
+####Simple examples
+
+The simplest way to configure project examples for build is to supply it with property "examples=true":
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true, examples: true ],
+    [ name: "ProjectC", build: true, examples: true ]
+  ]
+}
+```
+
+Implied semantics:
+
+* Whenever [buildExamples](#build-examples-task) task is being performed, the script will try to run "gradle build" 
+in the sub-folders "ProjectB/examples" and "ProjectC/examples". 
+* buildExamples task for every project depends on build task for that project.
+* The order, in which example builds are performed (relative to each other), is undefined.
+
+####Build examples within particular project subfolder
+
+Sometimes you need to specify which subfolder of the project folder contains examples:
+
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true, examples: true ],
+    [ name: "ProjectC", build: true, examples: "somewhere/inTheProjectTree" ]
+  ]
+}
+```
+
+Implied semantics:
+
+* Whenever [buildExamples](#build-examples-task) task is being performed, the script will try to run "gradle build"
+in the sub-folders "ProjectB/examples" and "ProjectC/somewhere/inTheProjectTree".
+
 **More information is coming soon.**
