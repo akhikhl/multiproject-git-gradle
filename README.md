@@ -42,7 +42,7 @@ then the default task [build](#build-task] is executed.
 
 ###Build task
 
-Iterates all projects described in [configuration](#configuring-projects], performs the following for each project:
+Iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
 
 1. Checks whether project exists in the file system. If not, the project is [updated](#update-task) 
 (actually, cloned) from [git-location](#configuring-git-locations).
@@ -55,7 +55,7 @@ Iterates all projects described in [configuration](#configuring-projects], perfo
 
 ###Update task
 
-Iterates all projects described in [configuration](#configuring-projects], performs the following for each project:
+Iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
 
 Checks whether project exists in the file system. 
 
