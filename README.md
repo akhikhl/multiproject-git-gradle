@@ -106,4 +106,6 @@ ext {
 
 ###Configuring project build
 
+###Configuring project examples
+
 **More information is coming soon.**
