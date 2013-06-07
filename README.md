@@ -241,6 +241,29 @@ Implied semantics:
 * Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
 "ProjectB" and "ProjectC/libs".
 
+####Specifying build tasks
+
+Some artifacts should be installed into maven/ivy repository, not simply built. For those you can specify buildTasks:
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true ],
+    [ name: "ProjectC", build: "libs", buildTasks: [ "install" ] ]
+  ]
+}
+```
+
+Implied semantics:
+
+* buildTasks property, when specified, must be an array, containing one or more task names.
+* buildTasks should be recognized by project-specific gradle script(s). For example, "ProjectC" 
+must apply gradle-maven plugin, in order to "understand" install task.
+* order, in which buildTasks are performed within the given project, is completely defined by project-specific
+script, not by multiproject-git-gradle.
+
 ###Configuring project examples
 
 **More information is coming soon.**
