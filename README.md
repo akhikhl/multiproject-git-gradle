@@ -180,7 +180,7 @@ ext {
   projects = [ 
     "ProjectA", 
     [ name: "ProjectB", gitBase: "https://github.com/anotherUser" ],
-    [ name: "ProjectC", gitSource: "git@github.com:thirdUser/someDifferentProjectName.git" ]
+    [ name: "ProjectC", gitSource: "https://anotherdomain.com/someDifferentProjectName.git" ]
     ... 
   ]
 }
@@ -195,9 +195,28 @@ gitBase property (either per-project or global) is ignored for such project.
 
 In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
 "ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git", "ProjectC" from 
-"git@github.com:thirdUser/someDifferentProjectName.git".
+"https://anotherdomain.com/someDifferentProjectName.git".
 
 ###Configuring project build
+
+The simplest way to configure project for build is to supply it with property "build=true":
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true ],
+    [ name: "ProjectC", build: true ]
+  ]
+}
+```
+
+Implied semantics:
+
+* Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
+"ProjectB" and "ProjectC". The order, in which builds are performed, is undefined (but can be fixed via 
+[dependsOn](#configuring-project-dependencies) property).
 
 ###Configuring project examples
 
