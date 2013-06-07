@@ -10,6 +10,17 @@ of assembly/testing/etc is guaranteed.
 Many thanks to the creators of gradle-git plugin ( https://github.com/ajoberstar/gradle-git ) for their excellent work,
 which made is multiproject-git-gradle possible and which is used by it.
 
+**Content of this document**
+
+* [Required files](#required-files)
+* [Command line syntax](#command-line-syntax)
+* [Supported tasks](#supported-tasks)
+  * [build task](#build-task)
+  * [update task](#update-task)
+  * [buildExamples task](#build-examples-task)
+* [Configuration syntax](#configuration-syntax)
+
+
 ##Required files
 
 To start using multiproject-git-gradle, you need two files: 
