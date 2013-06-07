@@ -44,13 +44,25 @@ then the default task [build](#build-task] is executed.
 
 Iterates all projects described in [configuration](#configuring-projects], performs the following for each project:
 
-Checks whether project exists in the file system. If not, the project will be [updated](#update-task) 
+1. Checks whether project exists in the file system. If not, the project is [updated](#update-task) 
 (actually, cloned) from [git-location](#configuring-git-locations).
+
+2. Checks whether the project has [build](#configuring-project-build) attributes. If it does not, the project is skipped (not built).
+
+3. Checks whether the project has [dependsOn](#configuring-project-dependencies) attribute. if it does, the dependencies are built first.
+
+4. The project itself is being built, according to [build](#configuring-project-build) attributes.
+
+###Update task
+
+
 
 ##Configuration syntax
 
 ###Configuring projects
 
 ###Configuring git-locations
+
+###Configuring project build
 
 **More information is coming soon.**
