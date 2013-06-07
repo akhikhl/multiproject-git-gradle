@@ -17,3 +17,4 @@ To start using multiproject-git-gradle, you need two files:
 "config.gradle" - you write it yourself, according to your needs. You can use "config.gradle" from this repository 
 as an example/starting-point for editing.
 
+**More information is coming soon.**
