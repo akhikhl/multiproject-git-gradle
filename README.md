@@ -147,8 +147,8 @@ ext {
 
 Implied semantics:
 
-* Whenever a project has gitBase property, the script will use it for calculating git-source.
-* Whenever a project does not have gitBase property, the script will use "global" gitBase property for calculating git-source.
+* Whenever a project has gitBase property, the script will use it for calculating git-repository.
+* Whenever a project does not have gitBase property, the script will use "global" gitBase property for calculating git-repository.
 
 In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
 "ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git".
@@ -169,7 +169,12 @@ ext {
 }
 ```
 
-gitSource can be specified only for individual projects, there is no global gitSource property.
+Implied semantics:
+
+* Whenever a project has gitSource property, the script will use it as complete URI for cloning/pulling.
+gitBase property (either per-project or global) is ignored for such project.
+
+* gitSource can be specified only for individual projects, there is no global gitSource property.
 
 ###Configuring project build
 
