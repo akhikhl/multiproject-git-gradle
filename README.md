@@ -199,6 +199,8 @@ In this concrete example (above) "ProjectA" will be cloned/pulled from "https://
 
 ###Configuring project build
 
+####Simple build
+
 The simplest way to configure project for build is to supply it with property "build=true":
 
 ```groovy
@@ -217,6 +219,27 @@ Implied semantics:
 * Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
 "ProjectB" and "ProjectC". The order, in which builds are performed, is undefined (but can be fixed via 
 [dependsOn](#configuring-project-dependencies) property).
+
+####Build within particular project subfolder
+
+Sometimes you need to specify which subfolder of the project folder should be built:
+
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true ],
+    [ name: "ProjectC", build: "libs" ]
+  ]
+}
+```
+
+Implied semantics:
+
+* Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
+"ProjectB" and "ProjectC/libs".
 
 ###Configuring project examples
 
