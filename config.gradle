@@ -1,0 +1,13 @@
+ext {
+  gitBase = "https://github.com/akhikhl"
+  projects = [
+    [ name: "checkableRows" ],
+    [ name: "checksums" ],
+    [ name: "contribs" ],
+    [ name: "focusable" ],
+    [ name: "gasmine", build: "libs", buildTasks: [ "install" ], dependsOn: "ghino", examples: true ],
+    [ name: "ghino", build: "libs", buildTasks: [ "install" ], examples: true ],
+    [ name: "osgi2maven", branch: "facelifting", build: true, buildTasks: [ "install" ] ],
+    [ name: "selectableRows" ]
+  ]
+}

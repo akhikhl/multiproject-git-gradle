@@ -1,0 +1,111 @@
+buildscript {
+  repositories { mavenCentral() }
+  dependencies { classpath 'org.ajoberstar:gradle-git:0.5.0' }
+}
+
+import org.ajoberstar.gradle.git.tasks.*
+
+apply from: "config.gradle"
+
+task update
+task build
+task buildExamples
+
+def isCollection(obj) {
+  return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
+}
+
+def toCollection(obj) {
+  return isCollection(obj) ? obj : [ obj ]
+}
+
+for(def proj in project.ext.projects) {
+
+  File projFolder = file(proj.name)
+  
+  def projUpdateTask = proj.name + "_update"
+  if(projFolder.exists()) {
+    project.task (projUpdateTask, type: GitPull) {
+      repoPath = projFolder.absolutePath
+    }
+    if(proj.branch) {
+      def projCheckoutTask = proj.name + "_checkout"
+      project.task (projCheckoutTask, type: GitCheckout) {
+        repoPath = projFolder.absolutePath
+        branchName = proj.branch
+      }
+      tasks[projUpdateTask].dependsOn projCheckoutTask
+    }
+  } else {
+    def gitSource;
+    if(proj.gitSource)
+      gitSource = proj.gitSource 
+    else {
+      def gitName = proj.gitName ? proj.gitName : proj.name + ".git"
+      def gitBase = proj.gitBase ? proj.gitBase : project.ext.gitBase
+      gitSource = gitBase
+      if(!gitSource.endsWith("/"))
+        gitSource += "/"
+      gitSource += gitName;
+    }
+    project.task (projUpdateTask, type: GitClone) {
+      destinationPath = projFolder.absolutePath
+      uri = gitSource
+      if(proj.branch) {
+        checkout = true
+        branch = proj.branch
+      }
+    }
+  }  
+  update.dependsOn tasks[projUpdateTask]
+  
+  if(proj.dependsOn) {
+    toCollection(proj.dependsOn).each { otherProj ->
+      tasks[projUpdateTask].dependsOn otherProj + "_update"
+    }
+  }
+  
+  def projBuildTask = proj.name + "_build"
+  if(proj.build) {
+    def projBuildFile = proj.build instanceof String ? proj.build : "."
+    projBuildFile = new File(projFolder, projBuildFile)
+    if(!projBuildFile.name.endsWith(".gradle"))
+      projBuildFile = new File(projBuildFile, "build.gradle")
+    def projBuildTasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
+    task(projBuildTask, type: GradleBuild) {
+      buildFile = projBuildFile
+      tasks = projBuildTasks
+    }
+    build.dependsOn tasks[projBuildTask]
+    if(projFolder.exists())
+      tasks[projBuildTask].mustRunAfter projUpdateTask
+    else
+      tasks[projBuildTask].dependsOn projUpdateTask
+    if(proj.dependsOn) {
+      toCollection(proj.dependsOn).each { otherProj ->
+        tasks[projBuildTask].dependsOn otherProj + "_build"
+      }
+    }      
+  } else if(!projFolder.exists())
+    build.dependsOn projUpdateTask
+    
+  if(proj.examples) {
+    def projBuildExamplesTask = proj.name + "_buildExamples"
+    def projExamplesFolder = proj.examples instanceof String ? proj.examples : "examples"
+    projExamplesFolder = new File(projFolder, projExamplesFolder)
+    task(projBuildExamplesTask, type: GradleBuild) {
+      tasks = [ "build" ]
+      dir = projExamplesFolder
+    }
+    tasks[projBuildExamplesTask].dependsOn build
+    buildExamples.dependsOn tasks[projBuildExamplesTask]
+    if(project.tasks.findByName(projBuildTask))
+      tasks[projBuildExamplesTask].dependsOn projBuildTask
+    else if(projFolder.exists())
+      tasks[projBuildExamplesTask].mustRunAfter projUpdateTask
+    else
+      tasks[projBuildExamplesTask].dependsOn projUpdateTask
+  }    
+}
+
+defaultTasks "build"
