@@ -112,7 +112,7 @@ ext {
 }
 ```
 
-(URL and project names are fictitious, for demonstration only).
+(URL and project names here and below are fictitious, for demonstration only).
 
 Note new things:
 
@@ -124,10 +124,34 @@ Implied semantics:
 * Each project will be cloned/pulled from the address, calculated as gitBase + "/" + projectName + ".git". For example,
 "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git".
 * Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
-how to clone/pull these projects and that's it.
-
+how to clone/pull these projects and that's it. See more information in chapter [configuring project build](#configuring-project-build).
 
 ###Configuring git-locations
+
+There are two ways to specify git-locations: via gitBase attribute and via gitSource attribute.
+
+####Configuring gitBase attribute
+
+gitBase can be specified "globally" or for individual projects:
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [ 
+    "ProjectA", 
+    [ name: "ProjectB", gitBase: "https://github.com/anotherUser" ]
+    ... 
+  ]
+}
+```
+
+Implied semantics:
+
+* Whenever a project has gitBase attribute, the script will use it for calculating git-source.
+* Whenever a project does not have gitBase attribute, the script will use "global" gitBase attribute for calculating git-source.
+
+In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
+"ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git".
 
 ###Configuring project build
 
