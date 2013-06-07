@@ -1,8 +1,8 @@
 ext {
   gitBase = "https://github.com/akhikhl"
   projects = [
-    [ name: "checkableRows" ],
-    [ name: "checksums" ],
+    "checkableRows",
+    "checksums",
     [ name: "contribs" ],
     [ name: "focusable" ],
     [ name: "gasmine", build: "libs", buildTasks: [ "install" ], dependsOn: "ghino", examples: true ],

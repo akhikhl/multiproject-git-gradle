@@ -21,15 +21,18 @@ def toCollection(obj) {
 
 for(def proj in project.ext.projects) {
 
-  File projFolder = file(proj.name)
+  def projName = proj instanceof String ? proj : proj.name
+  if(proj instanceof String)
+    proj = []
+  File projFolder = file(projName)
   
-  def projUpdateTask = proj.name + "_update"
+  def projUpdateTask = projName + "_update"
   if(projFolder.exists()) {
     project.task (projUpdateTask, type: GitPull) {
       repoPath = projFolder.absolutePath
     }
     if(proj.branch) {
-      def projCheckoutTask = proj.name + "_checkout"
+      def projCheckoutTask = projName + "_checkout"
       project.task (projCheckoutTask, type: GitCheckout) {
         repoPath = projFolder.absolutePath
         branchName = proj.branch
@@ -41,8 +44,14 @@ for(def proj in project.ext.projects) {
     if(proj.gitSource)
       gitSource = proj.gitSource 
     else {
-      def gitName = proj.gitName ? proj.gitName : proj.name + ".git"
-      def gitBase = proj.gitBase ? proj.gitBase : project.ext.gitBase
+      def gitName = proj.gitName ? proj.gitName : projName + ".git"      
+      def gitBase
+      if(proj.gitBase)
+        gitBase = proj.gitBase
+      else if(project.ext.has("gitBase"))
+        gitBase = project.ext.gitBase
+      else
+        throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.");
       gitSource = gitBase
       if(!gitSource.endsWith("/"))
         gitSource += "/"
@@ -65,7 +74,7 @@ for(def proj in project.ext.projects) {
     }
   }
   
-  def projBuildTask = proj.name + "_build"
+  def projBuildTask = projName + "_build"
   if(proj.build) {
     def projBuildFile = proj.build instanceof String ? proj.build : "."
     projBuildFile = new File(projFolder, projBuildFile)
@@ -90,7 +99,7 @@ for(def proj in project.ext.projects) {
     build.dependsOn projUpdateTask
     
   if(proj.examples) {
-    def projBuildExamplesTask = proj.name + "_buildExamples"
+    def projBuildExamplesTask = projName + "_buildExamples"
     def projExamplesFolder = proj.examples instanceof String ? proj.examples : "examples"
     projExamplesFolder = new File(projFolder, projExamplesFolder)
     task(projBuildExamplesTask, type: GradleBuild) {
