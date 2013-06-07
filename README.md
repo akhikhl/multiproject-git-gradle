@@ -40,17 +40,19 @@ then the default task [build](#build-task) is executed.
 
 ##Supported tasks
 
-###Build task
+###build task
+
+build task allows to build multiple gradle projects in an automated way. It does the following:
 
 Iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
 
 1. Checks whether project exists in the file system. If not, the project is cloned from [git-location](#configuring-git-locations).
 
-2. Checks whether the project has [build](#configuring-project-build) attributes. If it does not, the project is skipped (not built).
+2. Checks whether the project has [build](#configuring-project-build) attribute. If it does not, the project is skipped (not built).
 
 3. Checks whether the project has [dependsOn](#configuring-project-dependencies) attribute. if it does, the dependencies are built first.
 
-4. The project itself is being built, according to [build](#configuring-project-build) attributes.
+4. The project itself is being built, according to [build](#configuring-project-build) attribute.
 
 Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after 
 corresponding "update" steps. That means: 
@@ -61,13 +63,29 @@ Only if some projects are missing, they will be cloned from git-sources.
 b) if you run "gradle update build", it is guaranteed, that every project is first updated (pulled from repository)
 and only then built.
 
-###Update task
+###update task
+
+update task allows to clone/pull multiple projects (not necessarily gradle-projects) from git-sources in an automated way. It does the following:
 
 Iterates all projects described in [configuration](#configuring-projects), checks each project, whether it exists, then:
 
 1. If project does not exist, it is cloned from [git-location](#configuring-git-locations).
 
 2. If project exists, it is pulled from [git-location](#configuring-git-locations).
+
+###buildExamples task
+
+buildExamples task allows to build multiple "example" gradle projects in an automated way. It does the following:
+
+First it builds all projects, as described in [build task](#build-task).
+
+Then it iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
+
+1. Checks whether the project has [examples](#configuring-project-examples) attribute. If it does not, the project is skipped (not built).
+
+2. Tries to perform "gradle build" in [examples sub-folder](#configuring-project-examples) of the project folder.
+
+Note that "buildExamples" task depends on "build" task, but does not depend on "update" task.
 
 ##Configuration syntax
 
