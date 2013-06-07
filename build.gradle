@@ -76,13 +76,11 @@ for(def proj in project.ext.projects) {
   
   def projBuildTask = projName + "_build"
   if(proj.build) {
-    def projBuildFile = proj.build instanceof String ? proj.build : "."
-    projBuildFile = new File(projFolder, projBuildFile)
-    if(!projBuildFile.name.endsWith(".gradle"))
-      projBuildFile = new File(projBuildFile, "build.gradle")
+    def projBuildFolder = proj.build instanceof String ? proj.build : "."
+    projBuildFolder = new File(projFolder, projBuildFolder)
     def projBuildTasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
     task(projBuildTask, type: GradleBuild) {
-      buildFile = projBuildFile
+      dir = projBuildFolder
       tasks = projBuildTasks
     }
     build.dependsOn tasks[projBuildTask]
