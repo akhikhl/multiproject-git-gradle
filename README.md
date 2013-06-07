@@ -52,8 +52,8 @@ Iterates all projects described in [configuration](#configuring-projects), perfo
 
 4. The project itself is being built, according to [build](#configuring-project-build) attributes.
 
-Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after "update" steps.
-That means: 
+Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after 
+corresponding "update" steps. That means: 
 
 a) if you routinely run "gradle build", it will not pull the changes from git-sources, but only compile things for you.
 Only if some projects are missing, they will be cloned from git-sources.
