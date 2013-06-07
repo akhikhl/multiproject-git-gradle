@@ -92,7 +92,8 @@ Note that "buildExamples" task depends on "build" task, but does not depend on "
 "build.gradle" (of multiproject-git-gradle) reads "config.gradle" file in order to "understand" project structure.
 "config.gradle" is being interpreted by gradle, therefore it should comply to gradle syntax.
 
-Absolutely minimal version of "config.gradle" looks like this:
+Absolutely minimal version of "config.gradle" (which is useless, but "well-formed" in a sence 
+of multiproject-git-gradle) looks like this:
 
 ```groovy
 ext {
@@ -101,6 +102,30 @@ ext {
 ```
 
 ###Configuring projects
+
+The simplest usable configuration looks like this:
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [ "ProjectA", "ProjectB", ... ]
+}
+```
+
+(URL and project names are fictitious, for demonstration only).
+
+Note new things:
+
+* "projects" element contains project names as strings.
+* "gitBase" attribute specifies from where to get projects (see more information on this in chapter [configuring git-locations](#configuring-git-locations)).
+
+Implied semantics:
+
+* Each project will be cloned/pulled from the address, calculated as gitBase + "/" + projectName + ".git". For example,
+"ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git".
+* Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
+how to clone/pull these projects and that's it.
+
 
 ###Configuring git-locations
 
