@@ -89,6 +89,17 @@ Note that "buildExamples" task depends on "build" task, but does not depend on "
 
 ##Configuration syntax
 
+"build.gradle" (of multiproject-git-gradle) reads "config.gradle" file in order to "understand" project structure.
+"config.gradle" is being interpreted by gradle, therefore it should comply to gradle syntax.
+
+Absolutely minimal version of "config.gradle" looks like this:
+
+```groovy
+ext {
+  projects = []
+}
+```
+
 ###Configuring projects
 
 ###Configuring git-locations
