@@ -127,6 +127,19 @@ Implied semantics:
 * Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
 how to clone/pull these projects and that's it. See more information in chapter [configuring project build](#configuring-project-build).
 
+Another example shows that projects can be specified as strings or objects:
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB" ],
+    [ name: "ProjectC", build: true ]
+  ]
+}
+```
+
 ###Configuring git-repositories
 
 There are two ways to specify git-repositories: via gitBase property and via gitSource property.
