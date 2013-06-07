@@ -117,12 +117,13 @@ ext {
 Note new things:
 
 * "projects" element contains project names as strings.
-* "gitBase" property specifies from where to get projects (see more information on this in chapter [configuring git-repositories](#configuring-git-repositories)).
+* "gitBase" property specifies from where to get projects.
 
 Implied semantics:
 
-* Each project will be cloned/pulled from the address, calculated as gitBase + "/" + projectName + ".git". For example,
-"ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git".
+* Each project will be cloned/pulled from the relevant git repository. For example,
+"ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git"
+ (see more information on this in chapter [configuring git-repositories](#configuring-git-repositories)).
 * Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
 how to clone/pull these projects and that's it. See more information in chapter [configuring project build](#configuring-project-build).
 
@@ -147,7 +148,8 @@ ext {
 
 Implied semantics:
 
-* Whenever a project has gitBase property, the script will use it for calculating git-repository.
+* Whenever a project has gitBase property, the script will use it for calculating git-repository URI the following way:
+URI = gitBase + "/" + name + ".git"
 * Whenever a project does not have gitBase property, the script will use "global" gitBase property for calculating git-repository.
 
 In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
@@ -175,6 +177,10 @@ Implied semantics:
 gitBase property (either per-project or global) is ignored for such project.
 
 * gitSource can be specified only for individual projects, there is no global gitSource property.
+
+In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
+"ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git", "ProjectC" from 
+"git@github.com:thirdUser/someDifferentProjectName.git".
 
 ###Configuring project build
 
