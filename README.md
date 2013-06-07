@@ -19,6 +19,11 @@ which made is multiproject-git-gradle possible and which is used by it.
   * [update task](#update-task)
   * [buildExamples task](#buildexamples-task)
 * [Configuration syntax](#configuration-syntax)
+  * [Configuring projects](#configuring-projects)
+  * [Configuring git-repositories](#configuring-git-repositories) 
+  * [Configuring project build](#configuring-project-build)
+  * [Configuring project dependencies](#configuring-project-dependencies)
+  * [Configuring project examples](#configuring-project-examples)
 
 
 ##Required files
