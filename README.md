@@ -44,14 +44,16 @@ then the default task [build](#build-task] is executed.
 
 Iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
 
-1. Checks whether project exists in the file system. If not, the project is [updated](#update-task) 
-(actually, cloned) from [git-location](#configuring-git-locations).
+1. Checks whether project exists in the file system. If not, the project is cloned from [git-location](#configuring-git-locations).
 
 2. Checks whether the project has [build](#configuring-project-build) attributes. If it does not, the project is skipped (not built).
 
 3. Checks whether the project has [dependsOn](#configuring-project-dependencies) attribute. if it does, the dependencies are built first.
 
 4. The project itself is being built, according to [build](#configuring-project-build) attributes.
+
+Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after "update" steps.
+That means: if you repeatedly do "gradle build", it will not pull the changes from git-sources, but only compile things for you.
 
 ###Update task
 
