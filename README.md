@@ -133,7 +133,8 @@ There are two ways to specify git-repositories: via gitBase property and via git
 
 ####Configuring gitBase property
 
-gitBase can be specified "globally" or for individual projects:
+gitBase specifies "base" URL, from where the projects come. It supports all protocols supported by JGit library
+(for example, "http", "https", "git", "ssh"). gitBase can be specified "globally" or for individual projects:
 
 ```groovy
 ext {
@@ -157,7 +158,8 @@ In this concrete example (above) "ProjectA" will be cloned/pulled from "https://
 
 ####Configuring gitSource property
 
-gitSource property represents complete URI to git-repository and is not combined with anything: 
+gitSource property represents complete URI to git-repository and is not combined with anything.
+It supports all protocols supported by JGit library (for example, "http", "https", "git", "ssh").
 
 ```groovy
 ext {
