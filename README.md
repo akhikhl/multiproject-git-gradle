@@ -263,6 +263,7 @@ Implied semantics:
 must apply gradle-maven plugin, in order to "understand" install task.
 * order, in which buildTasks are performed within the given project, is completely defined by project-specific
 script, not by multiproject-git-gradle.
+* when buildTasks property is omitted, multiproject-git-gradle performs "build" task against the given project.
 
 ###Configuring project examples
 
