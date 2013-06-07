@@ -17,7 +17,7 @@ which made is multiproject-git-gradle possible and which is used by it.
 * [Supported tasks](#supported-tasks)
   * [build task](#build-task)
   * [update task](#update-task)
-  * [buildExamples task](#build-examples-task)
+  * [buildExamples task](#buildexamples-task)
 * [Configuration syntax](#configuration-syntax)
 
 
