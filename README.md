@@ -55,7 +55,13 @@ Iterates all projects described in [configuration](#configuring-projects], perfo
 
 ###Update task
 
+Iterates all projects described in [configuration](#configuring-projects], performs the following for each project:
 
+Checks whether project exists in the file system. 
+
+1. If project does not exist, it is cloned from [git-location](#configuring-git-locations).
+
+2. If project exists, it is pulled from [git-location](#configuring-git-locations).
 
 ##Configuration syntax
 
