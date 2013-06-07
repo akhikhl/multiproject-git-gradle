@@ -48,11 +48,11 @@ Iterates all projects described in [configuration](#configuring-projects), perfo
 
 1. Checks whether project exists in the file system. If not, the project is cloned from [git-location](#configuring-git-locations).
 
-2. Checks whether the project has [build](#configuring-project-build) attribute. If it does not, the project is skipped (not built).
+2. Checks whether the project has [build](#configuring-project-build) property. If it does not, the project is skipped (not built).
 
-3. Checks whether the project has [dependsOn](#configuring-project-dependencies) attribute. if it does, the dependencies are built first.
+3. Checks whether the project has [dependsOn](#configuring-project-dependencies) property. if it does, the dependencies are built first.
 
-4. The project itself is being built, according to [build](#configuring-project-build) attribute.
+4. The project itself is being built, according to [build](#configuring-project-build) property.
 
 Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after 
 corresponding "update" steps. That means: 
@@ -81,7 +81,7 @@ First it builds all projects, as described in [build task](#build-task).
 
 Then it iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
 
-1. Checks whether the project has [examples](#configuring-project-examples) attribute. If it does not, the project is skipped (not built).
+1. Checks whether the project has [examples](#configuring-project-examples) property. If it does not, the project is skipped (not built).
 
 2. Tries to perform "gradle build" in [examples sub-folder](#configuring-project-examples) of the project folder.
 
@@ -117,7 +117,7 @@ ext {
 Note new things:
 
 * "projects" element contains project names as strings.
-* "gitBase" attribute specifies from where to get projects (see more information on this in chapter [configuring git-locations](#configuring-git-locations)).
+* "gitBase" property specifies from where to get projects (see more information on this in chapter [configuring git-locations](#configuring-git-locations)).
 
 Implied semantics:
 
@@ -128,9 +128,9 @@ how to clone/pull these projects and that's it. See more information in chapter 
 
 ###Configuring git-locations
 
-There are two ways to specify git-locations: via gitBase attribute and via gitSource attribute.
+There are two ways to specify git-locations: via gitBase property and via gitSource property.
 
-####Configuring gitBase attribute
+####Configuring gitBase property
 
 gitBase can be specified "globally" or for individual projects:
 
@@ -147,11 +147,16 @@ ext {
 
 Implied semantics:
 
-* Whenever a project has gitBase attribute, the script will use it for calculating git-source.
-* Whenever a project does not have gitBase attribute, the script will use "global" gitBase attribute for calculating git-source.
+* Whenever a project has gitBase property, the script will use it for calculating git-source.
+* Whenever a project does not have gitBase property, the script will use "global" gitBase property for calculating git-source.
 
 In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
 "ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git".
+
+####Configuring gitSource property
+
+gitSource property represents complete URI to git-location and is not combined with anything. gitSource can be specified
+only for individual projects, there is no global gitSource property.
 
 ###Configuring project build
 
