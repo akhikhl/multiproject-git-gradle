@@ -36,7 +36,7 @@ It is possible to start gradle without task:
 gradle
 ```
 
-then the default task [build](#build-task] is executed.
+then the default task [build](#build-task) is executed.
 
 ##Supported tasks
 
