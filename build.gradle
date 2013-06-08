@@ -10,6 +10,7 @@ apply from: "config.gradle"
 task update
 task build
 task buildExamples
+task gitstatus
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -26,19 +27,17 @@ for(def proj in project.ext.projects) {
     proj = []
   File projFolder = file(projName)
   
-  def projUpdateTask = projName + "_update"
+  def projUpdateTask;
   if(projFolder.exists()) {
-    project.task (projUpdateTask, type: GitPull) {
+    projUpdateTask = task(projName + "_update", type: GitPull) {
       repoPath = projFolder.absolutePath
     }
-    if(proj.branch) {
-      def projCheckoutTask = projName + "_checkout"
-      project.task (projCheckoutTask, type: GitCheckout) {
+    if(proj.branch)
+      task(projName + "_checkout", type: GitCheckout) { task ->
         repoPath = projFolder.absolutePath
         branchName = proj.branch
+        projUpdateTask.dependsOn task
       }
-      tasks[projUpdateTask].dependsOn projCheckoutTask
-    }
   } else {
     def gitSource;
     if(proj.gitSource)
@@ -48,8 +47,8 @@ for(def proj in project.ext.projects) {
       def gitBase
       if(proj.gitBase)
         gitBase = proj.gitBase
-      else if(project.ext.has("gitBase"))
-        gitBase = project.ext.gitBase
+      else if(ext.has("gitBase"))
+        gitBase = ext.gitBase
       else
         throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.");
       gitSource = gitBase
@@ -57,7 +56,7 @@ for(def proj in project.ext.projects) {
         gitSource += "/"
       gitSource += gitName;
     }
-    project.task (projUpdateTask, type: GitClone) {
+    projUpdateTask = task(projName + "_update", type: GitClone) {
       destinationPath = projFolder.absolutePath
       uri = gitSource
       if(proj.branch) {
@@ -66,42 +65,57 @@ for(def proj in project.ext.projects) {
       }
     }
   }  
-  update.dependsOn tasks[projUpdateTask]
+  update.dependsOn projUpdateTask
   
-  def projBuildTask = projName + "_build"
+  def projBuildTask = null;
   if(proj.build) {
-    def projBuildFolder = proj.build instanceof String ? proj.build : "."
-    projBuildFolder = new File(projFolder, projBuildFolder)
-    def projBuildTasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
-    task(projBuildTask, type: GradleBuild) {
-      dir = projBuildFolder
-      tasks = projBuildTasks
+    projBuildTask = task(projName + "_build", type: GradleBuild) { task ->
+      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
+      tasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
+      build.dependsOn task
+      if(projFolder.exists())
+        task.mustRunAfter projUpdateTask
+      else
+        task.dependsOn projUpdateTask
     }
-    build.dependsOn tasks[projBuildTask]
-    if(projFolder.exists())
-      tasks[projBuildTask].mustRunAfter projUpdateTask
-    else
-      tasks[projBuildTask].dependsOn projUpdateTask
   } else if(!projFolder.exists())
     build.dependsOn projUpdateTask
     
-  if(proj.examples) {
-    def projBuildExamplesTask = projName + "_buildExamples"
-    def projExamplesFolder = proj.examples instanceof String ? proj.examples : "examples"
-    projExamplesFolder = new File(projFolder, projExamplesFolder)
-    task(projBuildExamplesTask, type: GradleBuild) {
+  if(proj.examples)
+    task(projName + "_buildExamples", type: GradleBuild) { task ->
       tasks = [ "build" ]
-      dir = projExamplesFolder
+      dir = new File(projFolder, proj.examples instanceof String ? proj.examples : "examples")
+      dependsOn build
+      buildExamples.dependsOn task
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
     }
-    tasks[projBuildExamplesTask].dependsOn build
-    buildExamples.dependsOn tasks[projBuildExamplesTask]
-    if(project.tasks.findByName(projBuildTask))
-      tasks[projBuildExamplesTask].dependsOn projBuildTask
-    else if(projFolder.exists())
-      tasks[projBuildExamplesTask].mustRunAfter projUpdateTask
+
+  task(projName + "_gitstatus", type: GitStatus) { task ->
+    description = "git status on " + projName
+    repoPath = projFolder.absolutePath
+    doLast {
+      [ "added", "changed", "conflicting", "missing", "modified", "removed", "untracked" ].each { fileSetName ->
+        task[fileSetName].files.each { file ->
+          println "${fileSetName}: ${file.absolutePath}"
+        }
+      }
+      task.untrackedDirs.files.each { file ->
+        if(!task.ignored.files.contains(file))
+          println "untracked dir: " + file.absolutePath
+      }
+    }
+    if(projFolder.exists())
+      mustRunAfter projUpdateTask
     else
-      tasks[projBuildExamplesTask].dependsOn projUpdateTask
-  }    
+      dependsOn projUpdateTask
+    mustRunAfter update
+    gitstatus.dependsOn task
+  }
 }
 
 // second pass, now we handle inter-project dependencies
@@ -110,21 +124,20 @@ for(def proj in project.ext.projects) {
   if(proj instanceof String)
     proj = []
   if(proj.dependsOn) {
-    def thisProjUpdate = tasks.findByName(projName + "_update")
+    def thisProjUpdate = tasks[projName + "_update"]
     def thisProjBuild = tasks.findByName(projName + "_build")
-    if(thisProjUpdate || thisProjBuild) {
-      toCollection(proj.dependsOn).each { otherProj ->
-        def otherProjUpdate = tasks.findByName(otherProj + "_update")
-        if(thisProjUpdate && otherProjUpdate)
-          thisProjUpdate.dependsOn otherProjUpdate
-        if(thisProjBuild) {
-          def otherProjBuild = tasks.findByName(otherProj + "_build")
-          if(otherProjBuild)
-            thisProjBuild.dependsOn otherProjBuild
-          else if (!file(otherProj).exists() && otherProjUpdate)
-            thisProjBuild.dependsOn otherProjUpdate
-        }
+    def thisProjGitStatus = tasks[projName + "_gitstatus"]
+    toCollection(proj.dependsOn).each { otherProj ->
+      def otherProjUpdate = otherProj + "_update"
+      thisProjUpdate.dependsOn otherProjUpdate
+      if(thisProjBuild) {
+        def otherProjBuild = tasks.findByName(otherProj + "_build")
+        if(otherProjBuild)
+          thisProjBuild.dependsOn otherProjBuild
+        else if (!file(otherProj).exists())
+          thisProjBuild.dependsOn otherProjUpdate
       }
+      thisProjGitStatus.dependsOn otherProj + "_gitstatus"
     }
   }
 }
