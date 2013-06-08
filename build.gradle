@@ -68,12 +68,6 @@ for(def proj in project.ext.projects) {
   }  
   update.dependsOn tasks[projUpdateTask]
   
-  if(proj.dependsOn) {
-    toCollection(proj.dependsOn).each { otherProj ->
-      tasks[projUpdateTask].dependsOn otherProj + "_update"
-    }
-  }
-  
   def projBuildTask = projName + "_build"
   if(proj.build) {
     def projBuildFolder = proj.build instanceof String ? proj.build : "."
@@ -88,11 +82,6 @@ for(def proj in project.ext.projects) {
       tasks[projBuildTask].mustRunAfter projUpdateTask
     else
       tasks[projBuildTask].dependsOn projUpdateTask
-    if(proj.dependsOn) {
-      toCollection(proj.dependsOn).each { otherProj ->
-        tasks[projBuildTask].dependsOn otherProj + "_build"
-      }
-    }      
   } else if(!projFolder.exists())
     build.dependsOn projUpdateTask
     
@@ -113,6 +102,31 @@ for(def proj in project.ext.projects) {
     else
       tasks[projBuildExamplesTask].dependsOn projUpdateTask
   }    
+}
+
+// second pass, now we handle inter-project dependencies
+for(def proj in project.ext.projects) {
+  def projName = proj instanceof String ? proj : proj.name
+  if(proj instanceof String)
+    proj = []
+  if(proj.dependsOn) {
+    def thisProjUpdate = tasks.findByName(projName + "_update")
+    def thisProjBuild = tasks.findByName(projName + "_build")
+    if(thisProjUpdate || thisProjBuild) {
+      toCollection(proj.dependsOn).each { otherProj ->
+        def otherProjUpdate = tasks.findByName(otherProj + "_update")
+        if(thisProjUpdate && otherProjUpdate)
+          thisProjUpdate.dependsOn otherProjUpdate
+        if(thisProjBuild) {
+          def otherProjBuild = tasks.findByName(otherProj + "_build")
+          if(otherProjBuild)
+            thisProjBuild.dependsOn otherProjBuild
+          else if (!file(otherProj).exists() && otherProjUpdate)
+            thisProjBuild.dependsOn otherProjUpdate
+        }
+      }
+    }
+  }
 }
 
 defaultTasks "build"
