@@ -11,6 +11,7 @@ task update
 task build
 task buildExamples
 task gitStatus
+task gitBranchList
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -116,6 +117,24 @@ for(def proj in project.ext.projects) {
     mustRunAfter update
     gitStatus.dependsOn task
   }
+
+  task(projName + "_gitBranchList", type: GitBranchList) { task ->
+    description = "git branches on " + projName
+    repoPath = projFolder.absolutePath
+    doLast {
+      branches.each { branch ->
+        if(branch.name == workingBranch.name)
+          print "* "
+        println branch.name
+      }
+    }
+    if(projFolder.exists())
+      mustRunAfter projUpdateTask
+    else
+      dependsOn projUpdateTask
+    mustRunAfter update
+    gitBranchList.dependsOn task
+  }  
 }
 
 // second pass, now we handle inter-project dependencies
