@@ -1,13 +1,18 @@
 ext {
   gitBase = "https://github.com/akhikhl"
   projects = [
-    "checkableRows",
-    "checksums",
+    [ name: "checkableRows" ],
+    [ name: "checksums" ],
     [ name: "contribs" ],
-    [ name: "focusable" ],
-    [ name: "gasmine", build: "libs", buildTasks: [ "install" ], dependsOn: "ghino", examples: true ],
-    [ name: "ghino", build: "libs", buildTasks: [ "install" ], examples: true ],
+    [ name: "focusable" ],    
+    [ name: "gasmine", build: "libs", buildTasks: [ "install" ], dependsOn: "gino", examples: true ],
+    [ name: "gino", build: "libs", buildTasks: [ "install" ], dependsOn: "gradle-onejar", examples: true ],
+    [ name: "jquery.sash" ],
+    [ name: "jquery.timers" ],
+    [ name: "gradle-onejar", build: "libs", buildTasks: [ "install" ], examples: true ],
     [ name: "osgi2maven", branch: "facelifting", build: true, buildTasks: [ "install" ] ],
-    [ name: "selectableRows" ]
+    [ name: "selectableRows" ],
+    [ name: "sweet", branch: "workInProgress", build: "libs", buildTasks: [ "install" ], dependsOn: [ "osgi2maven", "gradle-onejar" ], examples: true ]
   ]
 }
+

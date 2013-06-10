@@ -10,7 +10,7 @@ apply from: "config.gradle"
 task update
 task build
 task buildExamples
-task gitstatus
+task gitStatus
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -95,7 +95,7 @@ for(def proj in project.ext.projects) {
         dependsOn projUpdateTask
     }
 
-  task(projName + "_gitstatus", type: GitStatus) { task ->
+  task(projName + "_gitStatus", type: GitStatus) { task ->
     description = "git status on " + projName
     repoPath = projFolder.absolutePath
     doLast {
@@ -114,7 +114,7 @@ for(def proj in project.ext.projects) {
     else
       dependsOn projUpdateTask
     mustRunAfter update
-    gitstatus.dependsOn task
+    gitStatus.dependsOn task
   }
 }
 
@@ -126,7 +126,7 @@ for(def proj in project.ext.projects) {
   if(proj.dependsOn) {
     def thisProjUpdate = tasks[projName + "_update"]
     def thisProjBuild = tasks.findByName(projName + "_build")
-    def thisProjGitStatus = tasks[projName + "_gitstatus"]
+    def thisProjGitStatus = tasks[projName + "_gitStatus"]
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = otherProj + "_update"
       thisProjUpdate.dependsOn otherProjUpdate
@@ -137,7 +137,7 @@ for(def proj in project.ext.projects) {
         else if (!file(otherProj).exists())
           thisProjBuild.dependsOn otherProjUpdate
       }
-      thisProjGitStatus.dependsOn otherProj + "_gitstatus"
+      thisProjGitStatus.dependsOn otherProj + "_gitStatus"
     }
   }
 }
