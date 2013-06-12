@@ -21,8 +21,8 @@ which made is multiproject-git-gradle possible and which is used by it.
 * [Configuration syntax](#configuration-syntax)
   * [Configuring projects](#configuring-projects)
   * [Configuring git-repositories](#configuring-git-repositories) 
-  * [Configuring project build](#configuring-project-build)
-  * [Configuring project dependencies](#configuring-project-dependencies)
+  * [Configuring multi-project build](#configuring-multi-project-build)
+  * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
   * [Configuring project examples](#configuring-project-examples)
 
 
@@ -64,11 +64,11 @@ Iterates all projects described in [configuration](#configuring-projects), perfo
 
 1. Checks whether project exists in the file system. If not, the project is cloned from [git-repository](#configuring-git-repositories).
 
-2. Checks whether the project has [build](#configuring-project-build) property. If it does not, the project is skipped (not built).
+2. Checks whether the project has [build](#configuring-multi-project-build) property. If it does not, the project is skipped (not built).
 
-3. Checks whether the project has [dependsOn](#configuring-project-dependencies) property. if it does, the dependencies are built first.
+3. Checks whether the project has [dependsOn](#configuring-inter-project-dependencies) property. if it does, the dependencies are built first.
 
-4. The project itself is being built, according to [build](#configuring-project-build) property.
+4. The project itself is being built, according to [build](#configuring-multi-project-build) property.
 
 Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after 
 corresponding "update" steps. That means: 
@@ -141,7 +141,7 @@ Implied semantics:
 "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git"
  (see more information on this in chapter [configuring git-repositories](#configuring-git-repositories)).
 * Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
-how to clone/pull these projects and that's it. See more information in chapter [configuring project build](#configuring-project-build).
+how to clone/pull these projects and that's it. See more information in chapter [configuring multi-project build](#configuring-multi-project-build).
 
 Another example shows that projects can be specified as strings or objects:
 
@@ -213,7 +213,7 @@ In this concrete example (above) "ProjectA" will be cloned/pulled from "https://
 "ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git", "ProjectC" from 
 "https://anotherdomain.com/someDifferentProjectName.git".
 
-###Configuring project build
+###Configuring multi-project build
 
 ####Simple build
 
@@ -234,7 +234,7 @@ Implied semantics:
 
 * Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
 "ProjectB" and "ProjectC". The order, in which builds are performed, is undefined (but can be fixed via 
-[dependsOn](#configuring-project-dependencies) property).
+[dependsOn](#configuring-inter-project-dependencies) property).
 
 ####Build within particular project subfolder
 
@@ -281,7 +281,7 @@ must apply gradle-maven plugin, in order to "understand" install task.
 script, not by multiproject-git-gradle.
 * when buildTasks property is omitted, multiproject-git-gradle performs "build" task against the given project.
  
-###Configuring project dependencies
+###Configuring inter-project dependencies
 
 You can specify inter-project dependencies the following way:
 
