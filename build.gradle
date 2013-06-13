@@ -1,3 +1,21 @@
+/**
+* multiproject-git-gradle/build.gradle
+*
+* Gradle script automating git-clone/pull and compilation of multiple 
+* inter-connected projects.
+*
+* Written by Andrey Hihlovskiy (akhikhl AT gmail DOT com).
+* Licensed under the MIT (http://opensource.org/licenses/MIT).
+* Date: 13.06.2013
+*
+* @author Andrey Hihlovskiy
+* @version 1.0.0
+* @requires gradle 1.6, git 1.7
+*
+* Full documentation and sources at:
+* https://github.com/akhikhl/multiproject-git-gradle
+**/
+
 buildscript {
   repositories { mavenCentral() }
   dependencies { classpath 'org.ajoberstar:gradle-git:0.5.0' }
