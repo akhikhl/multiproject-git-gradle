@@ -7,8 +7,8 @@ git-repositories (from any repositories, supported by JGit) and typical gradle t
 run against some or all projects. Projects can be supplied with inter-project dependencies, so that particular order 
 of assembly/testing/etc is guaranteed.
 
-Many thanks to the creators of gradle-git plugin ( https://github.com/ajoberstar/gradle-git ) for their excellent work,
-which made is multiproject-git-gradle possible and which is used by it.
+Many thanks to the creators of gradle-git plugin ( https://github.com/ajoberstar/gradle-git ) for their excellent work, 
+which is used by multiproject-git-gradle.
 
 **Content of this document**
 
