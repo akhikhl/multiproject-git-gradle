@@ -24,7 +24,7 @@ which is used by multiproject-git-gradle.
   * [Configuring multi-project build](#configuring-multi-project-build)
   * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
   * [Configuring project examples](#configuring-project-examples)
-
+* [Copyright and License](#copyright-and-license)
 
 ##Required files
 
@@ -350,4 +350,13 @@ Implied semantics:
 * Whenever [buildExamples](#build-examples-task) task is being performed, the script will try to run "gradle build"
 in the sub-folders "ProjectB/examples" and "ProjectC/somewhere/inTheProjectTree".
 
-**More information is coming soon.**
+##Copyright and License
+
+Copyright 2013 (c) Andrey Hihlovskiy
+
+All versions, present and past, of "multiproject-git-gradle" script are licensed under MIT license:
+
+* [MIT](http://opensource.org/licenses/MIT)
+
+You are encouraged to use it to whatever purpose and whichever way, all for free, provided that you retain copyright 
+notice at the beginning of the script.
