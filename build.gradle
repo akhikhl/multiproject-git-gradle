@@ -25,11 +25,12 @@ import org.ajoberstar.gradle.git.tasks.*
 
 apply from: "config.gradle"
 
-task update
 task build
 task buildExamples
 task gitStatus
 task gitBranchList
+task update
+task uploadArchives
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -99,13 +100,27 @@ for(def proj in project.ext.projects) {
     }
   } else if(!projFolder.exists())
     build.dependsOn projUpdateTask
-    
+
   if(proj.examples)
     task(projName + "_buildExamples", type: GradleBuild) { task ->
-      tasks = [ "build" ]
       dir = new File(projFolder, proj.examples instanceof String ? proj.examples : "examples")
+      tasks = [ "build" ]
       dependsOn build
       buildExamples.dependsOn task
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
+    }
+
+  if(proj.uploadArchives)
+    task(projName + "_uploadArchives", type: GradleBuild) { task ->
+      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
+      tasks = [ "uploadArchives" ]
+      dependsOn build
+      uploadArchives.dependsOn task
       if(projBuildTask)
         dependsOn projBuildTask
       else if(projFolder.exists())
