@@ -32,6 +32,8 @@ task gitBranchList
 task update
 task uploadArchives
 
+def rootFolder = project.ext.has("rootFolder") ? new File(project.projectDir, project.ext.rootFolder).canonicalFile : new File(project.projectDir)
+
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
 }
@@ -45,7 +47,7 @@ for(def proj in project.ext.projects) {
   def projName = proj instanceof String ? proj : proj.name
   if(proj instanceof String)
     proj = []
-  File projFolder = file(projName)
+  File projFolder = new File(rootFolder, projName)
   
   def projUpdateTask;
   if(projFolder.exists()) {
@@ -67,8 +69,8 @@ for(def proj in project.ext.projects) {
       def gitBase
       if(proj.gitBase)
         gitBase = proj.gitBase
-      else if(ext.has("gitBase"))
-        gitBase = ext.gitBase
+      else if(project.ext.has("gitBase"))
+        gitBase = project.ext.gitBase
       else
         throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.");
       gitSource = gitBase
