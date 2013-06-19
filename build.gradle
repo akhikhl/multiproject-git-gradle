@@ -23,7 +23,32 @@ buildscript {
 
 import org.ajoberstar.gradle.git.tasks.*
 
+class MultiProjectExtension {
+  String rootFolder
+  String gitBase
+  def projects = [:];
+  def project(proj) {
+    String projName = proj instanceof String ? proj : proj.name
+    if(projects.containsKey(projName))
+      throw new Exception("Duplicate project definition: $projName");
+    if(proj instanceof String)
+      proj = [ name: proj ];
+    projects[projName] = proj
+  }
+}
+
+project.extensions.create "multiproject", MultiProjectExtension
+
 apply from: "config.gradle"
+
+if(project.ext.has("extraConfig")) {
+  def extraConfigs = project.ext.extraConfig.split(",")
+  for(def extraConfig in extraConfigs) {
+    if(!extraConfig.endsWith(".gradle"))
+      extraConfig += ".gradle";
+    apply from: extraConfig
+  }
+}
 
 task build
 task buildExamples
@@ -32,7 +57,7 @@ task gitBranchList
 task update
 task uploadArchives
 
-def rootFolder = project.ext.has("rootFolder") ? new File(project.projectDir, project.ext.rootFolder).canonicalFile : new File(project.projectDir)
+def rootFolder = project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir)
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -42,11 +67,9 @@ def toCollection(obj) {
   return isCollection(obj) ? obj : [ obj ]
 }
 
-for(def proj in project.ext.projects) {
-
-  def projName = proj instanceof String ? proj : proj.name
-  if(proj instanceof String)
-    proj = []
+for(def e in project.multiproject.projects) {  
+  String projName = e.key
+  def proj = e.value  
   File projFolder = new File(rootFolder, projName)
   
   def projUpdateTask;
@@ -69,8 +92,8 @@ for(def proj in project.ext.projects) {
       def gitBase
       if(proj.gitBase)
         gitBase = proj.gitBase
-      else if(project.ext.has("gitBase"))
-        gitBase = project.ext.gitBase
+      else if(project.multiproject.gitBase)
+        gitBase = project.multiproject.gitBase
       else
         throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.");
       gitSource = gitBase
@@ -173,10 +196,9 @@ for(def proj in project.ext.projects) {
 }
 
 // second pass, now we handle inter-project dependencies
-for(def proj in project.ext.projects) {
-  def projName = proj instanceof String ? proj : proj.name
-  if(proj instanceof String)
-    proj = []
+for(def e in project.multiproject.projects) {
+  def projName = e.key
+  def proj = e.value
   if(proj.dependsOn) {
     def thisProjUpdate = tasks[projName + "_update"]
     def thisProjBuild = tasks.findByName(projName + "_build")
