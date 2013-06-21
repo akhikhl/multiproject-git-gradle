@@ -87,7 +87,7 @@ for(def e in project.multiproject.projects) {
         projUpdateTask.dependsOn task
       }
   } else {
-    def gitSource;
+    def gitSource
     if(proj.gitSource)
       gitSource = proj.gitSource 
     else {
@@ -102,7 +102,7 @@ for(def e in project.multiproject.projects) {
       gitSource = gitBase
       if(!gitSource.endsWith("/"))
         gitSource += "/"
-      gitSource += gitName;
+      gitSource += gitName
     }
     projUpdateTask = task(projName + "_update", type: GitClone) {
       destinationPath = projFolder.absolutePath
@@ -115,11 +115,18 @@ for(def e in project.multiproject.projects) {
   }  
   update.dependsOn projUpdateTask
   
-  def projBuildTask = null;
-  def projCleanTask = null;
+  def projBuildTask = null
+  def projCleanTask = null
   if(proj.build) {
     projBuildTask = task(projName + "_build", type: GradleBuild) { task ->
-      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
+      if(proj.build instanceof String) {
+        if(proj.build.endsWith(".gradle"))
+          buildFile = "$projFolder/${proj.build}"
+        else
+          dir = "$projFolder/${proj.build}"
+      }
+      else
+        dir = projFolder
       tasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
       build.dependsOn task
       if(projFolder.exists())
