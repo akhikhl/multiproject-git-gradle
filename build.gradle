@@ -38,7 +38,7 @@ class MultiProjectExtension {
 }
 
 project.extensions.create "multiproject", MultiProjectExtension
-
+  
 apply from: "config.gradle"
 
 if(project.ext.has("extraConfig")) {
@@ -52,10 +52,13 @@ if(project.ext.has("extraConfig")) {
 
 task build
 task buildExamples
-task gitStatus
 task gitBranchList
+task gitStatus
 task update
 task uploadArchives
+
+if(!tasks.findByName("clean"))
+  task clean
 
 def rootFolder = project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir)
 
@@ -113,6 +116,7 @@ for(def e in project.multiproject.projects) {
   update.dependsOn projUpdateTask
   
   def projBuildTask = null;
+  def projCleanTask = null;
   if(proj.build) {
     projBuildTask = task(projName + "_build", type: GradleBuild) { task ->
       dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
@@ -123,8 +127,19 @@ for(def e in project.multiproject.projects) {
       else
         task.dependsOn projUpdateTask
     }
-  } else if(!projFolder.exists())
+    projCleanTask = task(projName + "_clean", type: GradleBuild) { task ->
+      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
+      tasks = [ "clean" ]
+      clean.dependsOn task
+      if(projFolder.exists())
+        task.mustRunAfter projUpdateTask
+      else
+        task.dependsOn projUpdateTask
+    }
+  } else if(!projFolder.exists()) {
     build.dependsOn projUpdateTask
+    clean.dependsOn projUpdateTask
+  }
 
   if(proj.examples)
     task(projName + "_buildExamples", type: GradleBuild) { task ->
@@ -202,6 +217,7 @@ for(def e in project.multiproject.projects) {
   if(proj.dependsOn) {
     def thisProjUpdate = tasks[projName + "_update"]
     def thisProjBuild = tasks.findByName(projName + "_build")
+    def thisProjClean = tasks.findByName(projName + "_clean")
     def thisProjGitStatus = tasks[projName + "_gitStatus"]
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = otherProj + "_update"
@@ -212,6 +228,13 @@ for(def e in project.multiproject.projects) {
           thisProjBuild.dependsOn otherProjBuild
         else if (!file(otherProj).exists())
           thisProjBuild.dependsOn otherProjUpdate
+      }
+      if(thisProjClean) {
+        def otherProjClean = tasks.findByName(otherProj + "_clean")
+        if(otherProjClean)
+          thisProjClean.dependsOn otherProjClean
+        else if (!file(otherProj).exists())
+          thisProjClean.dependsOn otherProjUpdate
       }
       thisProjGitStatus.dependsOn otherProj + "_gitStatus"
     }
