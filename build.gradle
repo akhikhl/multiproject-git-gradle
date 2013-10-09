@@ -9,8 +9,8 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.0
-* @requires gradle 1.6, git 1.7
+* @version 1.0.1
+* @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
 * https://github.com/akhikhl/multiproject-git-gradle
@@ -26,39 +26,49 @@ import org.ajoberstar.gradle.git.tasks.*
 class MultiProjectExtension {
   String rootFolder
   String gitBase
-  def projects = [:];
+  def projects = [:]
   def project(proj) {
-    String projName = proj instanceof String ? proj : proj.name
+    String projName = isString(proj) ? proj : proj.name
     if(projects.containsKey(projName))
-      throw new Exception("Duplicate project definition: $projName");
-    if(proj instanceof String)
-      proj = [ name: proj ];
+      throw new Exception("Duplicate project definition: $projName")
+    if(isString(proj))
+      proj = [ name: proj as String ]
     projects[projName] = proj
   }
+  boolean isString(x) { 
+    x instanceof String || x instanceof GString 
+  }  
 }
 
-project.extensions.create "multiproject", MultiProjectExtension
-  
-apply from: "config.gradle"
+boolean isString(x) { 
+  x instanceof String || x instanceof GString 
+}
 
-if(project.ext.has("extraConfig")) {
-  def extraConfigs = project.ext.extraConfig.split(",")
+project.extensions.create 'multiproject', MultiProjectExtension
+  
+apply from: 'config.gradle'
+
+if(project.ext.has('extraConfig')) {
+  def extraConfigs = project.ext.extraConfig.split(',')
   for(def extraConfig in extraConfigs) {
-    if(!extraConfig.endsWith(".gradle"))
-      extraConfig += ".gradle";
+    if(!extraConfig.endsWith('.gradle'))
+      extraConfig += '.gradle'
     apply from: extraConfig
   }
 }
 
 task build
 task buildExamples
+task buildApps
 task gitBranchList
 task gitStatus
 task update
 task uploadArchives
 
-if(!tasks.findByName("clean"))
+if(!tasks.findByName('clean'))
   task clean
+
+clean.mustRunAfter update
 
 def rootFolder = project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir)
 
@@ -75,13 +85,13 @@ for(def e in project.multiproject.projects) {
   def proj = e.value  
   File projFolder = new File(rootFolder, projName)
   
-  def projUpdateTask;
+  def projUpdateTask
   if(projFolder.exists()) {
-    projUpdateTask = task(projName + "_update", type: GitPull) {
+    projUpdateTask = task("${projName}_update", type: GitPull) {
       repoPath = projFolder.absolutePath
     }
     if(proj.branch)
-      task(projName + "_checkout", type: GitCheckout) { task ->
+      task("${projName}_checkout", type: GitCheckout) { task ->
         repoPath = projFolder.absolutePath
         branchName = proj.branch
         projUpdateTask.dependsOn task
@@ -91,20 +101,20 @@ for(def e in project.multiproject.projects) {
     if(proj.gitSource)
       gitSource = proj.gitSource 
     else {
-      def gitName = proj.gitName ? proj.gitName : projName + ".git"      
+      def gitName = proj.gitName ?: "${projName}.git"      
       def gitBase
       if(proj.gitBase)
         gitBase = proj.gitBase
       else if(project.multiproject.gitBase)
         gitBase = project.multiproject.gitBase
       else
-        throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.");
+        throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.")
       gitSource = gitBase
-      if(!gitSource.endsWith("/"))
-        gitSource += "/"
+      if(!gitName.startsWith(':') && !gitSource.endsWith('/'))
+        gitSource += '/'
       gitSource += gitName
     }
-    projUpdateTask = task(projName + "_update", type: GitClone) {
+    projUpdateTask = task("${projName}_update", type: GitClone) {
       destinationPath = projFolder.absolutePath
       uri = gitSource
       if(proj.branch) {
@@ -118,25 +128,25 @@ for(def e in project.multiproject.projects) {
   def projBuildTask = null
   def projCleanTask = null
   if(proj.build) {
-    projBuildTask = task(projName + "_build", type: GradleBuild) { task ->
-      if(proj.build instanceof String) {
-        if(proj.build.endsWith(".gradle"))
+    projBuildTask = task("${projName}_build", type: GradleBuild) { task ->
+      if(isString(proj.build)) {
+        if(proj.build.endsWith('.gradle'))
           buildFile = "$projFolder/${proj.build}"
         else
           dir = "$projFolder/${proj.build}"
       }
       else
         dir = projFolder
-      tasks = proj.buildTasks ? proj.buildTasks : [ "build" ]
+      tasks = proj.buildTasks ? proj.buildTasks : [ 'build' ]
       build.dependsOn task
       if(projFolder.exists())
         task.mustRunAfter projUpdateTask
       else
         task.dependsOn projUpdateTask
     }
-    projCleanTask = task(projName + "_clean", type: GradleBuild) { task ->
-      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
-      tasks = [ "clean" ]
+    projCleanTask = task("${projName}_clean", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
+      tasks = [ 'clean' ]
       clean.dependsOn task
       if(projFolder.exists())
         task.mustRunAfter projUpdateTask
@@ -149,9 +159,9 @@ for(def e in project.multiproject.projects) {
   }
 
   if(proj.examples)
-    task(projName + "_buildExamples", type: GradleBuild) { task ->
-      dir = new File(projFolder, proj.examples instanceof String ? proj.examples : "examples")
-      tasks = [ "build" ]
+    task("${projName}_buildExamples", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
+      tasks = [ 'build' ]
       dependsOn build
       buildExamples.dependsOn task
       if(projBuildTask)
@@ -162,10 +172,24 @@ for(def e in project.multiproject.projects) {
         dependsOn projUpdateTask
     }
 
+  if(proj.apps)
+    task("${projName}_buildApps", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
+      tasks = [ 'build' ]
+      dependsOn build
+      buildApps.dependsOn task
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
+    }
+
   if(proj.uploadArchives)
-    task(projName + "_uploadArchives", type: GradleBuild) { task ->
-      dir = new File(projFolder, proj.build instanceof String ? proj.build : ".")
-      tasks = [ "uploadArchives" ]
+    task("${projName}_uploadArchives", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
+      tasks = [ 'uploadArchives' ]
       dependsOn build
       uploadArchives.dependsOn task
       if(projBuildTask)
@@ -176,18 +200,18 @@ for(def e in project.multiproject.projects) {
         dependsOn projUpdateTask
     }
 
-  task(projName + "_gitStatus", type: GitStatus) { task ->
-    description = "git status on " + projName
+  task("${projName}_gitStatus", type: GitStatus) { task ->
+    description = "git status on ${projName}"
     repoPath = projFolder.absolutePath
     doLast {
-      [ "added", "changed", "conflicting", "missing", "modified", "removed", "untracked" ].each { fileSetName ->
+      [ 'added', 'changed', 'conflicting', 'missing', 'modified', 'removed', 'untracked' ].each { fileSetName ->
         task[fileSetName].files.each { file ->
           println "${fileSetName}: ${file.absolutePath}"
         }
       }
       task.untrackedDirs.files.each { file ->
         if(!task.ignored.files.contains(file))
-          println "untracked dir: " + file.absolutePath
+          println "untracked dir: ${file.absolutePath}"
       }
     }
     if(projFolder.exists())
@@ -198,13 +222,13 @@ for(def e in project.multiproject.projects) {
     gitStatus.dependsOn task
   }
 
-  task(projName + "_gitBranchList", type: GitBranchList) { task ->
-    description = "git branches on " + projName
+  task("${projName}_gitBranchList", type: GitBranchList) { task ->
+    description = "git branches on ${projName}"
     repoPath = projFolder.absolutePath
     doLast {
       branches.each { branch ->
         if(branch.name == workingBranch.name)
-          print "* "
+          print '* '
         println branch.name
       }
     }
@@ -222,30 +246,30 @@ for(def e in project.multiproject.projects) {
   def projName = e.key
   def proj = e.value
   if(proj.dependsOn) {
-    def thisProjUpdate = tasks[projName + "_update"]
-    def thisProjBuild = tasks.findByName(projName + "_build")
-    def thisProjClean = tasks.findByName(projName + "_clean")
-    def thisProjGitStatus = tasks[projName + "_gitStatus"]
+    def thisProjUpdate = tasks.findByName("${projName}_update")
+    def thisProjBuild = tasks.findByName("${projName}_build")
+    def thisProjClean = tasks.findByName("${projName}_clean")
+    def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
     toCollection(proj.dependsOn).each { otherProj ->
-      def otherProjUpdate = otherProj + "_update"
+      def otherProjUpdate = "${otherProj}_update"
       thisProjUpdate.dependsOn otherProjUpdate
       if(thisProjBuild) {
-        def otherProjBuild = tasks.findByName(otherProj + "_build")
+        def otherProjBuild = tasks.findByName("${otherProj}_build")
         if(otherProjBuild)
           thisProjBuild.dependsOn otherProjBuild
         else if (!file(otherProj).exists())
           thisProjBuild.dependsOn otherProjUpdate
       }
       if(thisProjClean) {
-        def otherProjClean = tasks.findByName(otherProj + "_clean")
+        def otherProjClean = tasks.findByName("${otherProj}_clean")
         if(otherProjClean)
           thisProjClean.dependsOn otherProjClean
         else if (!file(otherProj).exists())
           thisProjClean.dependsOn otherProjUpdate
       }
-      thisProjGitStatus.dependsOn otherProj + "_gitStatus"
+      thisProjGitStatus.dependsOn "${otherProj}_gitStatus"
     }
   }
 }
 
-defaultTasks "build"
+defaultTasks 'buildApps'
