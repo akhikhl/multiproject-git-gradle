@@ -9,7 +9,7 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.1
+* @version 1.0.2
 * @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
@@ -130,6 +130,7 @@ for(def e in project.multiproject.projects) {
   if(proj.build) {
     projBuildTask = task("${projName}_build", type: GradleBuild) { task ->
       if(isString(proj.build)) {
+        proj.build = proj.build as String
         if(proj.build.endsWith('.gradle'))
           buildFile = "$projFolder/${proj.build}"
         else
@@ -153,12 +154,49 @@ for(def e in project.multiproject.projects) {
       else
         task.dependsOn projUpdateTask
     }
+    if(proj.contribs) {
+      task("${projName}_installContribs", type: GradleBuild) { task ->
+        if(isString(proj.contribs)) {
+          proj.contribs = proj.contribs as String
+          if(proj.contribs.endsWith('.gradle'))
+            buildFile = "$projFolder/${proj.build}"
+          else
+            dir = "$projFolder/${proj.contribs}"
+        }
+        else
+          dir = "$projFolder/contribs"
+        tasks = [ 'install' ]
+        projBuildTask.dependsOn task
+        if(projFolder.exists())
+          task.mustRunAfter projUpdateTask
+        else
+          task.dependsOn projUpdateTask      
+      }
+      task("${projName}_cleanContribs", type: GradleBuild) { task ->
+        if(isString(proj.contribs)) {
+          proj.contribs = proj.contribs as String
+          if(proj.contribs.endsWith('.gradle'))
+            buildFile = "$projFolder/${proj.build}"
+          else
+            dir = "$projFolder/${proj.contribs}"
+        }
+        else
+          dir = "$projFolder/contribs"
+        tasks = [ 'clean' ]
+        clean.dependsOn task
+        task.dependsOn projCleanTask
+        if(projFolder.exists())
+          task.mustRunAfter projUpdateTask
+        else
+          task.dependsOn projUpdateTask      
+      }
+    }
   } else if(!projFolder.exists()) {
     build.dependsOn projUpdateTask
     clean.dependsOn projUpdateTask
   }
 
-  if(proj.examples)
+  if(proj.examples) {
     task("${projName}_buildExamples", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'build' ]
@@ -171,8 +209,20 @@ for(def e in project.multiproject.projects) {
       else
         dependsOn projUpdateTask
     }
+    task("${projName}_cleanExamples", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
+      tasks = [ 'clean' ]
+      clean.dependsOn task
+      if(projCleanTask)
+        projCleanTask.dependsOn task
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
+    }
+  }
 
-  if(proj.apps)
+  if(proj.apps) {
     task("${projName}_buildApps", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'build' ]
@@ -185,9 +235,21 @@ for(def e in project.multiproject.projects) {
       else
         dependsOn projUpdateTask
     }
+    task("${projName}_cleanApps", type: GradleBuild) { task ->
+      dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
+      tasks = [ 'clean' ]
+      clean.dependsOn task
+      if(projCleanTask)
+        projCleanTask.dependsOn task
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
+    }
+  }
 
-  if(proj.uploadArchives)
-    task("${projName}_uploadArchives", type: GradleBuild) { task ->
+  if(proj.uploadArchives) {
+    def uploadArchivesTask = task("${projName}_uploadArchives", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'uploadArchives' ]
       dependsOn build
@@ -199,6 +261,25 @@ for(def e in project.multiproject.projects) {
       else
         dependsOn projUpdateTask
     }
+    if(proj.contribs)
+      task("${projName}_uploadContribs", type: GradleBuild) { task ->
+        if(isString(proj.contribs)) {
+          proj.contribs = proj.contribs as String
+          if(proj.contribs.endsWith('.gradle'))
+            buildFile = "$projFolder/${proj.build}"
+          else
+            dir = "$projFolder/${proj.contribs}"
+        }
+        else
+          dir = "$projFolder/contribs"
+        tasks = [ 'uploadArchives' ]
+        uploadArchivesTask.dependsOn task
+        if(projFolder.exists())
+          task.mustRunAfter projUpdateTask
+        else
+          task.dependsOn projUpdateTask      
+      }
+  }
 
   task("${projName}_gitStatus", type: GitStatus) { task ->
     description = "git status on ${projName}"
