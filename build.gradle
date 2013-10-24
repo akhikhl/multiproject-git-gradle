@@ -9,7 +9,7 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.2
+* @version 1.0.4
 * @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
@@ -18,7 +18,7 @@
 
 buildscript {
   repositories { mavenCentral() }
-  dependencies { classpath 'org.ajoberstar:gradle-git:0.5.0' }
+  dependencies { classpath 'org.ajoberstar:gradle-git:0.6.3' }
 }
 
 import org.ajoberstar.gradle.git.tasks.*
@@ -329,6 +329,8 @@ for(def e in project.multiproject.projects) {
   if(proj.dependsOn) {
     def thisProjUpdate = tasks.findByName("${projName}_update")
     def thisProjBuild = tasks.findByName("${projName}_build")
+    def thisProjBuildExamples = tasks.findByName("${projName}_buildExamples")
+    def thisProjBuildApps = tasks.findByName("${projName}_buildApps")
     def thisProjClean = tasks.findByName("${projName}_clean")
     def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
     toCollection(proj.dependsOn).each { otherProj ->
@@ -340,6 +342,20 @@ for(def e in project.multiproject.projects) {
           thisProjBuild.dependsOn otherProjBuild
         else if (!file(otherProj).exists())
           thisProjBuild.dependsOn otherProjUpdate
+      }
+      if(thisProjBuildExamples) {
+        def otherProjBuild = tasks.findByName("${otherProj}_build")
+        if(otherProjBuild)
+          thisProjBuildExamples.dependsOn otherProjBuild
+        else if (!file(otherProj).exists())
+          thisProjBuildExamples.dependsOn otherProjUpdate
+      }
+      if(thisProjBuildApps) {
+        def otherProjBuild = tasks.findByName("${otherProj}_build")
+        if(otherProjBuild)
+          thisProjBuildApps.dependsOn otherProjBuild
+        else if (!file(otherProj).exists())
+          thisProjBuildApps.dependsOn otherProjUpdate
       }
       if(thisProjClean) {
         def otherProjClean = tasks.findByName("${otherProj}_clean")
