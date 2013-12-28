@@ -116,7 +116,35 @@ multiproject {
 }
 ```
 
-###Configuring projects
+###Specifying projects
+
+The simplest usable configuration looks like this:
+
+```groovy
+multiproject {
+  project name: 'ProjectA'
+  project name: 'ProjectB'
+}
+```
+
+where ProjectA and ProjectB must designate existing subfolders of the current folder.
+
+**Effect:** when you run "gradle build", multiproject-git-gradle will consequently build each project specified in multiproject configuration.
+
+###Configuring project dependencies
+
+You can specify inter-project dependencies:
+
+```groovy
+multiproject {
+  project name: 'ProjectA'
+  project name: 'ProjectB', dependsOn: 'ProjectA'
+  project name: 'ProjectC', dependsOn: 'ProjectA'
+  project name: 'ProjectD', dependsOn: [ 'ProjectB', 'ProjectC' ]
+}
+```
+
+dependencies guarantee that gradle tasks are executed in the right order. In the example above, 'ProjectB' and 'ProjectC' are compiled after 'ProjectA', ''ProjectD' is compiled after 'ProjectB' and 'ProjectC'.
 
 The simplest usable configuration looks like this:
 
