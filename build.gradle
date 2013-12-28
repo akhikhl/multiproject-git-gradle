@@ -9,7 +9,7 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.4
+* @version 1.0.6
 * @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
@@ -25,14 +25,35 @@ import org.ajoberstar.gradle.git.tasks.*
 
 class MultiProjectExtension {
   String rootFolder
-  String gitBase
   def projects = [:]
+  String gitBase
+  String gitNameSeparator = '/'
+  String gitNameSuffix = '.git'
+  def git(Map options = [:], Closure closure) {
+    def savedGitBase = gitBase
+    gitBase = options.baseUrl
+    def savedGitNameSeparator = gitNameSeparator
+    gitNameSeparator = options.nameSeparator ?: gitNameSeparator 
+    def savedGitNameSuffix = gitNameSuffix
+    gitNameSuffix = options.nameSuffix ?: gitNameSuffix
+    closure.delegate = this
+    closure()
+    gitNameSuffix = savedGitNameSuffix
+    gitNameSeparator = savedGitNameSeparator
+    gitBase = savedGitBase
+  }
   def project(proj) {
     String projName = isString(proj) ? proj : proj.name
     if(projects.containsKey(projName))
       throw new Exception("Duplicate project definition: $projName")
     if(isString(proj))
       proj = [ name: proj as String ]
+    if(!proj.gitBase && !proj.gitSource)
+      proj.gitBase = gitBase
+    if(!proj.gitNameSeparator && !proj.gitSource)
+      proj.gitNameSeparator = gitNameSeparator
+    if(!proj.gitNameSuffix && !proj.gitSource)
+      proj.gitNameSuffix = gitNameSuffix
     projects[projName] = proj
   }
   boolean isString(x) { 
@@ -70,7 +91,7 @@ if(!tasks.findByName('clean'))
 
 clean.mustRunAfter update
 
-def rootFolder = project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir)
+def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir))
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
@@ -101,7 +122,8 @@ for(def e in project.multiproject.projects) {
     if(proj.gitSource)
       gitSource = proj.gitSource 
     else {
-      def gitName = proj.gitName ?: "${projName}.git"      
+      def gitName = proj.gitName ?: projName
+      gitName += proj.gitNameSuffix      
       def gitBase
       if(proj.gitBase)
         gitBase = proj.gitBase
@@ -110,8 +132,7 @@ for(def e in project.multiproject.projects) {
       else
         throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.")
       gitSource = gitBase
-      if(!gitName.startsWith(':') && !gitSource.endsWith('/'))
-        gitSource += '/'
+      gitSource += proj.gitNameSeparator
       gitSource += gitName
     }
     projUpdateTask = task("${projName}_update", type: GitClone) {
@@ -125,19 +146,21 @@ for(def e in project.multiproject.projects) {
   }  
   update.dependsOn projUpdateTask
   
+  boolean shouldBuild = proj.build == null || proj.build
+  boolean buildSelfDefined = proj.build == null || (proj.build instanceof Boolean && proj.build)
   def projBuildTask = null
   def projCleanTask = null
-  if(proj.build) {
+  if(shouldBuild) {
     projBuildTask = task("${projName}_build", type: GradleBuild) { task ->
-      if(isString(proj.build)) {
-        proj.build = proj.build as String
+      if(buildSelfDefined)
+        dir = projFolder
+      else {
+        proj.build = proj.build.toString()
         if(proj.build.endsWith('.gradle'))
           buildFile = "$projFolder/${proj.build}"
         else
           dir = "$projFolder/${proj.build}"
       }
-      else
-        dir = projFolder
       tasks = proj.buildTasks ? proj.buildTasks : [ 'build' ]
       build.dependsOn task
       if(projFolder.exists())
@@ -200,15 +223,16 @@ for(def e in project.multiproject.projects) {
     task("${projName}_buildExamples", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'build' ]
-      dependsOn build
+      task.dependsOn build
       buildExamples.dependsOn task
       if(projBuildTask)
-        dependsOn projBuildTask
+        task.dependsOn projBuildTask
       else if(projFolder.exists())
-        mustRunAfter projUpdateTask
+        task.mustRunAfter projUpdateTask
       else
-        dependsOn projUpdateTask
+        task.dependsOn projUpdateTask      
     }
+
     task("${projName}_cleanExamples", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'clean' ]
@@ -216,12 +240,12 @@ for(def e in project.multiproject.projects) {
       if(projCleanTask)
         projCleanTask.dependsOn task
       else if(projFolder.exists())
-        mustRunAfter projUpdateTask
+        task.mustRunAfter projUpdateTask
       else
-        dependsOn projUpdateTask
+        task.dependsOn projUpdateTask
     }
   }
-
+  
   if(proj.apps) {
     task("${projName}_buildApps", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
@@ -229,12 +253,13 @@ for(def e in project.multiproject.projects) {
       dependsOn build
       buildApps.dependsOn task
       if(projBuildTask)
-        dependsOn projBuildTask
+        task.dependsOn projBuildTask
       else if(projFolder.exists())
-        mustRunAfter projUpdateTask
+        task.mustRunAfter projUpdateTask
       else
-        dependsOn projUpdateTask
+        task.dependsOn projUpdateTask
     }
+
     task("${projName}_cleanApps", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'clean' ]
@@ -242,24 +267,24 @@ for(def e in project.multiproject.projects) {
       if(projCleanTask)
         projCleanTask.dependsOn task
       else if(projFolder.exists())
-        mustRunAfter projUpdateTask
+        task.mustRunAfter projUpdateTask
       else
-        dependsOn projUpdateTask
+        task.dependsOn projUpdateTask
     }
   }
 
-  if(proj.uploadArchives) {
+  if(proj.uploadArchives || buildSelfDefined) {
     def uploadArchivesTask = task("${projName}_uploadArchives", type: GradleBuild) { task ->
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'uploadArchives' ]
       dependsOn build
       uploadArchives.dependsOn task
       if(projBuildTask)
-        dependsOn projBuildTask
+        task.dependsOn projBuildTask
       else if(projFolder.exists())
-        mustRunAfter projUpdateTask
+        task.mustRunAfter projUpdateTask
       else
-        dependsOn projUpdateTask
+        task.dependsOn projUpdateTask
     }
     if(proj.contribs)
       task("${projName}_uploadContribs", type: GradleBuild) { task ->
