@@ -1,8 +1,13 @@
+/* This is an example configuration, demonstrating multiproject-git-gradle at work.
+ * To use this configuration, run from the command-line "gradle build".
+ * See more information in "README.md".
+ */
 multiproject {
-  rootFolder '..'
-  gitBase 'https://github.com/akhikhl'
-  project name: 'gasmine', dependsOn: 'gino', build: 'libs', buildTasks: [ 'install' ], examples: true, uploadArchives: true
-  project name: 'gino', dependsOn: 'gradle-onejar', build: 'libs', buildTasks: [ 'install' ], examples: true, uploadArchives: true
-  project name: 'gradle-onejar', build: 'libs', buildTasks: [ 'install' ], examples: true, uploadArchives: true
-  project name: 'gretty', build: 'libs', buildTasks: [ 'install' ], examples: true, uploadArchives: true
+  rootFolder '../akhikhl_projects'
+  git baseUrl: 'https://github.com/akhikhl', {
+    project name: 'gradle-onejar'
+    project name: 'xmltools', dependsOn: 'gradle-onejar'
+    project name: 'gino', dependsOn: 'gradle-onejar'
+    project name: 'gasmine', dependsOn: 'gino'
+  }
 }

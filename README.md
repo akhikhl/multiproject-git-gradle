@@ -16,14 +16,20 @@ which is used by multiproject-git-gradle.
 * [Command line syntax](#command-line-syntax)
 * [Supported tasks](#supported-tasks)
   * [build task](#build-task)
-  * [update task](#update-task)
+  * [buildApps task](#buildapps-task)
   * [buildExamples task](#buildexamples-task)
-* [Configuration syntax](#configuration-syntax)
-  * [Configuring projects](#configuring-projects)
+  * [clean task](#clean-task)
+  * [gitBranchList task](#gitbranchlist-task)
+  * [gitStatus task](#gitstatus-task)
+  * [update task](#update-task)
+  * [uploadArchives task](#uploadarchives-task)
+* [Configuration](#configuration)  
+  * [Specifying projects](#specifying-projects)
   * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
   * [Configuring git-repositories](#configuring-git-repositories) 
-  * [Configuring multi-project build](#configuring-multi-project-build)
-  * [Configuring project examples](#configuring-project-examples)
+  * [Configuring build property](#configuring-build-property)
+  * [Configuring apps property](#configuring-apps-property)
+  * [Configuring examples property](#configuring-examples-property)
 * [Copyright and License](#copyright-and-license)
 
 ##Required files
@@ -33,8 +39,7 @@ To start using multiproject-git-gradle, you need two files:
 "build.gradle"  - taken from this repository, this is gradle script. 
 
 "config.gradle" - you write it yourself, according to your needs. You can use "config.gradle" from this repository 
-as an example/starting-point for editing. See more information on this in chapter
-[Configuration syntax](#configuration-syntax).
+as an example/starting-point for editing. See more information on this in chapter [Configuration](#configuration).
 
 ##Command line syntax
 
@@ -60,15 +65,15 @@ then the default task [buildApps](#buildapps-task) is executed.
 
 build task allows to build multiple gradle projects (from different git-repositories) in an automated way. It does the following:
 
-Iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
+Iterates all projects described in [configuration](#configuration), performs the following for each project:
 
 1. Checks whether project exists in the file system. If not, the project is cloned from [git-repository](#configuring-git-repositories).
 
-2. Checks whether the project has [build](#configuring-multi-project-build) property. If it does not, the project is skipped (not built).
+2. Checks whether the project has [build property](#configuring-build-property) and configures project-level "build" task.
 
 3. Checks whether the project has [dependsOn](#configuring-inter-project-dependencies) property. if it does, the dependencies are built first.
 
-4. The project itself is being built, according to [build](#configuring-multi-project-build) property.
+4. The project itself is being built, according to [build property](#configuring-build-property).
 
 Note that "build" task does not depend on "update" task, but all "build" steps are performed strictly after 
 corresponding "update" steps. That means: 
@@ -76,34 +81,62 @@ corresponding "update" steps. That means:
 a) if you routinely run "gradle build", it will not pull the changes from git-sources, but only compile things for you.
 Only if some projects are missing, they will be cloned from git-sources.
 
-b) if you run "gradle update build", it is guaranteed, that every project is first updated (pulled from repository)
+b) if you run "gradle update build", it is guaranteed, that every project is first updated (cloned or pulled from repository)
 and only then built.
+
+###buildApps task
+
+buildApps is an optional task, allowing to build "apps" sub-projects of multiple gradle projects (from different git-repositories) in an automated way. 
+It does the following:
+
+First it builds all projects, as described in [build task](#build-task).
+
+Then it iterates all projects described in [configuration](#configuration), performs the following for each project:
+
+1. Checks whether the project has ["apps" property](#configuring-apps-property) and configures project-level "buildApps" task.
+
+2. Tries to perform "gradle build" in [apps sub-folder](#configuring-apps-property) of the project folder.
+
+###buildExamples task
+
+buildExamples is an optional task, allowing to build "examples" sub-projects of multiple gradle projects (from different git-repositories) in an automated way. 
+It does the following:
+
+First it builds all projects, as described in [build task](#build-task).
+
+Then it iterates all projects described in [configuration](#configuration), performs the following for each project:
+
+1. Checks whether the project has [examples](#configuring-examples-property) property. If it does not, the project is skipped (not built).
+
+2. Tries to perform "gradle build" in [examples sub-folder](#configuring-examples-property) of the project folder.
+
+###clean task
+
+clean task allows to clean multiple projects (from different git-repositories) in an automated way.
+
+###gitBranchList task
+
+TODO: document this task!
+
+###gitStatus task
+
+TODO: document this task!
 
 ###update task
 
 update task allows to clone/pull multiple projects (not necessarily gradle-projects) from git-sources in an automated way. It does the following:
 
-Iterates all projects described in [configuration](#configuring-projects), checks each project, whether it exists, then:
+Iterates all projects described in [configuration](#configuration), checks each project, whether it exists, then:
 
 1. If project does not exist, it is cloned from [git-repository](#configuring-git-repositories).
 
 2. If project exists, it is pulled from [git-repository](#configuring-git-repositories).
 
-###buildExamples task
+###uploadArchives task
 
-buildExamples task allows to build multiple "example" gradle projects in an automated way. It does the following:
+TODO: document this task!
 
-First it builds all projects, as described in [build task](#build-task).
-
-Then it iterates all projects described in [configuration](#configuring-projects), performs the following for each project:
-
-1. Checks whether the project has [examples](#configuring-project-examples) property. If it does not, the project is skipped (not built).
-
-2. Tries to perform "gradle build" in [examples sub-folder](#configuring-project-examples) of the project folder.
-
-Note that "buildExamples" task depends on "build" task, but does not depend on "update" task.
-
-##Configuration syntax
+##Configuration
 
 "build.gradle" (of multiproject-git-gradle) reads "config.gradle" file in order to "understand" project structure.
 "config.gradle" is being interpreted by gradle, therefore it should comply to gradle syntax.
@@ -130,10 +163,10 @@ multiproject {
 where ProjectA and ProjectB must designate existing subfolders of the current folder.
 
 **Effect:** when you run "gradle build", multiproject-git-gradle will consequently build each project specified in multiproject configuration.
+ 
+###Configuring inter-project dependencies
 
-###Configuring project dependencies
-
-You can specify inter-project dependencies:
+You can specify inter-project dependencies the following way:
 
 ```groovy
 multiproject {
@@ -144,25 +177,7 @@ multiproject {
 }
 ```
 
-dependencies guarantee that gradle tasks are executed in the right order. In the example above, 'ProjectB' and 'ProjectC' are compiled after 'ProjectA', ''ProjectD' is compiled after 'ProjectB' and 'ProjectC'.
- 
-###Configuring inter-project dependencies
-
-You can specify inter-project dependencies the following way:
-
-```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true, dependsOn: "ProjectA" ],
-    [ name: "ProjectC", build: true, dependsOn: [ "ProjectA" ] ]
-    [ name: "ProjectD", build: true, dependsOn: [ "ProjectB", "ProjectC" ] ]
-  ]
-}
-```
-
-Implied semantics:
+Rules:
 
 * dependsOn can be specified as a string or an array of strings.
 * dependsOn refers to projects (not tasks).
@@ -170,71 +185,39 @@ Implied semantics:
 * dependsOn is transitive. In the example above, "ProjectD" directly depends on "ProjectB", "ProjectC" and, indirectly,
 on "ProjectA".
 
-The simplest usable configuration looks like this:
-
-```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [ "ProjectA", "ProjectB", ... ]
-}
-```
-
-(URL and project names here and below are fictitious, for demonstration only).
-
-Note new things:
-
-* "projects" element contains project names as strings.
-* "gitBase" property specifies from where to get projects.
-
-Implied semantics:
-
-* Each project will be cloned/pulled from the relevant git repository. For example,
-"ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git"
- (see more information on this in chapter [configuring git-repositories](#configuring-git-repositories)).
-* Projects, as they declared in the example above, could not be built by multiproject-git-gradle. The script "understands"
-how to clone/pull these projects and that's it. See more information in chapter [configuring multi-project build](#configuring-multi-project-build).
-
-Another example shows that projects can be specified as strings or objects:
-
-```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB" ],
-    [ name: "ProjectC", build: true ]
-  ]
-}
-```
-
 ###Configuring git-repositories
 
 There are two ways to specify git-repositories: via gitBase property and via gitSource property.
 
 ####Configuring gitBase property
 
-gitBase specifies "base" URL, from where the projects come. It supports all protocols supported by JGit library
-(for example, "http", "https", "git", "ssh"). gitBase can be specified "globally" or for individual projects:
+gitBase specifies "base" URL, from where the project(s) come. It supports all protocols supported by JGit library
+(for example, "http", "https", "git", "ssh"). gitBase can be specified "globally", for project group or for individual projects:
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [ 
-    "ProjectA", 
-    [ name: "ProjectB", gitBase: "https://github.com/anotherUser" ]
-    ... 
-  ]
+multiproject {
+  gitBase = 'https://github.com/someUser'
+  project name: 'ProjectA'
+  git gitBase: 'https://github.com/anotherUser', {
+    project name: 'ProjectB'
+    project name: 'ProjectC'
+  }
+  project name: 'ProjectD', gitBase: 'https://github.com/thirdUser'
 }
 ```
 
-Implied semantics:
+Rules:
 
 * Whenever a project has gitBase property, the script will use it for calculating git-repository URI the following way:
 URI = gitBase + "/" + name + ".git"
-* Whenever a project does not have gitBase property, the script will use "global" gitBase property for calculating git-repository.
 
-In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
-"ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git".
+* Whenever a project is enclosed by "git" group, defining gitBase property, the script will use it for calculating git-repository.
+
+* Whenever a project does not have gitBase property and is not enclosed by "git" group, the script will use "global" gitBase property for calculating git-repository.
+
+In the concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
+"ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git", "ProjectC" will be cloned/pulled from 
+"https://github.com/anotherUser/ProjectC.git" and "ProjectD" will be cloned/pulled from "https://github.com/thirdUser/ProjectD.git".
 
 ####Configuring gitSource property
 
@@ -242,140 +225,111 @@ gitSource property represents complete URI to git-repository and is not combined
 It supports all protocols supported by JGit library (for example, "http", "https", "git", "ssh").
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [ 
-    "ProjectA", 
-    [ name: "ProjectB", gitBase: "https://github.com/anotherUser" ],
-    [ name: "ProjectC", gitSource: "https://anotherdomain.com/someDifferentProjectName.git" ]
-    ... 
-  ]
+multiproject {
+  gitBase = 'https://github.com/someUser'
+  project name: 'ProjectA'
+  project name: "ProjectB", gitSource: "https://anotherdomain.com/someDifferentProjectName.git"
 }
 ```
 
-Implied semantics:
+Rules:
 
 * Whenever a project has gitSource property, the script will use it as complete URI for cloning/pulling.
-gitBase property (either per-project or global) is ignored for such project.
+gitBase property (either per-project, per-group or global) is ignored for such project.
 
 * gitSource can be specified only for individual projects, there is no global gitSource property.
 
-In this concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
-"ProjectB" will be cloned/pulled from "https://github.com/anotherUser/ProjectB.git", "ProjectC" from 
-"https://anotherdomain.com/someDifferentProjectName.git".
+In the concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
+"ProjectB" will be cloned/pulled from "https://anotherdomain.com/someDifferentProjectName.git".
 
-###Configuring multi-project build
+####Configuring gitNameSeparator and gitNameSuffix
 
-####Simple build
-
-The simplest way to configure project for build is to supply it with property "build=true":
+By default, if a project does not have gitSource property, it's effective git repository URI is calculated
+by formula: URI = gitBase + "/" + name + ".git"
+You can fine-tune this formula by specifying gitNameSeparator and gitNameSuffix: either globally, per-group or per-project:
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true ],
-    [ name: "ProjectC", build: true ]
-  ]
+multiproject {
+  gitBase = 'https://github.com/someUser'
+  project name: 'ProjectA'
+  git gitBase: 'git@someGitoliteRepository', gitNameSeparator: ':', gitNameSuffix: '', {
+    project name: 'ProjectB'
+    project name: 'ProjectC'
+  }
 }
 ```
 
-Implied semantics:
+In the concrete example (above) "ProjectA" will be cloned/pulled from "https://github.com/someUser/ProjectA.git",
+"ProjectB" will be cloned/pulled from "git@someGitoliteRepository:ProjectB", "ProjectC" will be cloned/pulled from 
+"git@someGitoliteRepository:ProjectC".
 
-* Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
-"ProjectB" and "ProjectC". The order, in which builds are performed, is undefined (but can be fixed via 
-[dependsOn](#configuring-inter-project-dependencies) property).
+###Configuring build property
 
-####Build within particular project subfolder
-
-Sometimes you need to specify which subfolder of the project folder should be built:
-
+By default, multiproject-git-gradle builds all projects specified in multiproject configuration.
+You can fine-tune what and how is built by using "build" property:
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true ],
-    [ name: "ProjectC", build: "libs" ]
-  ]
+multiproject {
+  project name: 'ProjectA'
+  project name: 'ProjectB', build: false
+  project name: 'ProjectC', build: 'subFolder'
 }
 ```
 
-Implied semantics:
+Rules:
 
-* Whenever [build](#build-task) task is being performed, the script will try to run "gradle build" in the sub-folders
-"ProjectB" and "ProjectC/libs".
+* Whenever a project does not have "build" property, gradle script will run "build" task against projectDir folder
 
-####Specifying build tasks
+* Whenever a project has "build" property and it evaluates to false, gradle script will not build the given project
 
-Some artifacts should be installed into maven/ivy repository, not simply built. For those you can specify buildTasks:
+* Whenever a project has "build" property and it evaluates to string, gradle script will run "build" task against the combined folder "$projectDir/$build".
+
+In the concrete example (above) "ProjectA" will be built in "ProjectA" subfolder,
+"ProjectB" will not be built, "ProjectC" will be built in "ProjectC/subFolder" subfolder.
+
+###Configuring apps property
+
+If you specify "apps" property for a given project, multiproject-git-gradle defines additional task "buildApps",
+which can be called on command line as "gradle buildApps".
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true ],
-    [ name: "ProjectC", build: "libs", buildTasks: [ "install" ] ]
-  ]
+multiproject {
+  project name: 'ProjectA', apps: true
+  project name: 'ProjectB', apps: "applications"
 }
 ```
 
-Implied semantics:
+Rules:
 
-* buildTasks property, when specified, must be an array, containing one or more task names.
-* buildTasks should be recognized by project-specific gradle script(s). For example, "ProjectC" 
-must apply gradle-maven plugin, in order to "understand" install task.
-* order, in which buildTasks are performed within the given project, is completely defined by project-specific
-script, not by multiproject-git-gradle.
-* when buildTasks property is omitted, multiproject-git-gradle performs "build" task against the given project.
+* Whenever a project has "apps" property and it evaluates to true, gradle script defines "buildApps" task, 
+which will be run against the combined folder "$projectDir/apps".
 
-###Configuring project examples
+* Whenever a project has "apps" property and it evaluates to string, gradle script defines "buildApps" task, 
+which will be run against the combined folder "$projectDir/$apps".
 
-####Simple examples
+* Otherwise "buildApps" task is not defined for the given project.
 
-The simplest way to configure project examples for build is to supply it with property "examples=true":
+###Configuring examples property
+
+If you specify "examples" property for a given project, multiproject-git-gradle defines additional task "buildExamples",
+which can be called on command line as "gradle buildExamples".
 
 ```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true, examples: true ],
-    [ name: "ProjectC", build: true, examples: true ]
-  ]
+multiproject {
+  project name: 'ProjectA', examples: true
+  project name: 'ProjectB', examples: "samples"
 }
 ```
 
-Implied semantics:
+Rules:
 
-* Whenever [buildExamples](#build-examples-task) task is being performed, the script will try to run "gradle build" 
-in the sub-folders "ProjectB/examples" and "ProjectC/examples". 
-* buildExamples task for every project depends on build task for that project.
-* The order, in which example builds are performed (relative to each other), is undefined.
+* Whenever a project has "examples" property and it evaluates to true, gradle script defines "buildExamples" task, 
+which will be run against the combined folder "$projectDir/examples".
 
-####Build examples within particular project subfolder
+* Whenever a project has "examples" property and it evaluates to string, gradle script defines "buildExamples" task, 
+which will be run against the combined folder "$projectDir/$examples".
 
-Sometimes you need to specify which subfolder of the project folder contains examples:
-
-
-```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true, examples: true ],
-    [ name: "ProjectC", build: true, examples: "somewhere/inTheProjectTree" ]
-  ]
-}
-```
-
-Implied semantics:
-
-* Whenever [buildExamples](#build-examples-task) task is being performed, the script will try to run "gradle build"
-in the sub-folders "ProjectB/examples" and "ProjectC/somewhere/inTheProjectTree".
+* Otherwise "buildExamples" task is not defined for the given project.
 
 ##Copyright and License
 
