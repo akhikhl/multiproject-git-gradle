@@ -9,7 +9,7 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.7
+* @version 1.0.8
 * @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
@@ -33,9 +33,9 @@ class MultiProjectExtension {
     def savedGitBase = gitBase
     gitBase = options.baseUrl
     def savedGitNameSeparator = gitNameSeparator
-    gitNameSeparator = options.nameSeparator ?: gitNameSeparator 
+    gitNameSeparator = options.nameSeparator ?: options.gitNameSeparator ?: gitNameSeparator 
     def savedGitNameSuffix = gitNameSuffix
-    gitNameSuffix = options.nameSuffix ?: gitNameSuffix
+    gitNameSuffix = options.nameSuffix ?: options.gitNameSuffix ?: gitNameSuffix
     closure.delegate = this
     closure()
     gitNameSuffix = savedGitNameSuffix
