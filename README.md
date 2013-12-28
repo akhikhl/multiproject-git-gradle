@@ -52,7 +52,7 @@ It is possible to start gradle without task:
 gradle
 ```
 
-then the default task [build](#build-task) is executed.
+then the default task [buildApps](#buildapps-task) is executed.
 
 ##Supported tasks
 
@@ -112,8 +112,7 @@ Absolutely minimal version of "config.gradle" (which is useless, but "well-forme
 of multiproject-git-gradle) looks like this:
 
 ```groovy
-ext {
-  projects = []
+multiproject {
 }
 ```
 
