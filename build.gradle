@@ -9,7 +9,7 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.6
+* @version 1.0.7
 * @requires gradle 1.8, git 1.8
 *
 * Full documentation and sources at:
@@ -91,7 +91,7 @@ if(!tasks.findByName('clean'))
 
 clean.mustRunAfter update
 
-def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : new File(project.projectDir))
+def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : project.projectDir)
 
 def isCollection(obj) {
   return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
