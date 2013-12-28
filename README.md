@@ -20,9 +20,9 @@ which is used by multiproject-git-gradle.
   * [buildExamples task](#buildexamples-task)
 * [Configuration syntax](#configuration-syntax)
   * [Configuring projects](#configuring-projects)
+  * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
   * [Configuring git-repositories](#configuring-git-repositories) 
   * [Configuring multi-project build](#configuring-multi-project-build)
-  * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
   * [Configuring project examples](#configuring-project-examples)
 * [Copyright and License](#copyright-and-license)
 
@@ -145,6 +145,30 @@ multiproject {
 ```
 
 dependencies guarantee that gradle tasks are executed in the right order. In the example above, 'ProjectB' and 'ProjectC' are compiled after 'ProjectA', ''ProjectD' is compiled after 'ProjectB' and 'ProjectC'.
+ 
+###Configuring inter-project dependencies
+
+You can specify inter-project dependencies the following way:
+
+```groovy
+ext {
+  gitBase = "https://github.com/someUser"
+  projects = [
+    "ProjectA",
+    [ name: "ProjectB", build: true, dependsOn: "ProjectA" ],
+    [ name: "ProjectC", build: true, dependsOn: [ "ProjectA" ] ]
+    [ name: "ProjectD", build: true, dependsOn: [ "ProjectB", "ProjectC" ] ]
+  ]
+}
+```
+
+Implied semantics:
+
+* dependsOn can be specified as a string or an array of strings.
+* dependsOn refers to projects (not tasks).
+* dependsOn defines the order in which projects are updated (cloned/pulled from their git-repositories) and built.
+* dependsOn is transitive. In the example above, "ProjectD" directly depends on "ProjectB", "ProjectC" and, indirectly,
+on "ProjectA".
 
 The simplest usable configuration looks like this:
 
@@ -307,30 +331,6 @@ must apply gradle-maven plugin, in order to "understand" install task.
 * order, in which buildTasks are performed within the given project, is completely defined by project-specific
 script, not by multiproject-git-gradle.
 * when buildTasks property is omitted, multiproject-git-gradle performs "build" task against the given project.
- 
-###Configuring inter-project dependencies
-
-You can specify inter-project dependencies the following way:
-
-```groovy
-ext {
-  gitBase = "https://github.com/someUser"
-  projects = [
-    "ProjectA",
-    [ name: "ProjectB", build: true, dependsOn: "ProjectA" ],
-    [ name: "ProjectC", build: true, dependsOn: [ "ProjectA" ] ]
-    [ name: "ProjectD", build: true, dependsOn: [ "ProjectB", "ProjectC" ] ]
-  ]
-}
-```
-
-Implied semantics:
-
-* dependsOn can be specified as a string or an array of strings.
-* dependsOn refers to projects (not tasks).
-* dependsOn defines the order in which projects are updated (cloned/pulled from their git-repositories) and built.
-* dependsOn is transitive. In the example above, "ProjectD" directly depends on "ProjectB", "ProjectC" and, indirectly,
-on "ProjectA".
 
 ###Configuring project examples
 
