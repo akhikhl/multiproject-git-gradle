@@ -3,7 +3,7 @@
 ##Overview
 
 This is gradle script for multi-project git-based setup, configuration and build. It supports automated cloning/pulling 
-git-repositories (from any repositories, supported by JGit) and typical gradle tasks ("build", "install", etc) that can be
+git-repositories (from any repositories, supported by JGit) and typical gradle tasks ("build", "clean", etc) that can be
 run against some or all projects. Projects can be supplied with inter-project dependencies, so that particular order 
 of assembly/testing/etc is guaranteed.
 
