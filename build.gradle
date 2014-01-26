@@ -9,8 +9,8 @@
 * Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.8
-* @requires gradle 1.8, git 1.8
+* @version 1.0.9
+* @requires gradle 1.8+, git 1.8+
 *
 * Full documentation and sources at:
 * https://github.com/akhikhl/multiproject-git-gradle
@@ -104,7 +104,7 @@ def toCollection(obj) {
 for(def e in project.multiproject.projects) {  
   String projName = e.key
   def proj = e.value  
-  File projFolder = new File(rootFolder, projName)
+  File projFolder = new File(rootFolder, new File(projName).getName())
   
   def projUpdateTask
   if(projFolder.exists()) {
