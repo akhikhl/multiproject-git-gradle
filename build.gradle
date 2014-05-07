@@ -6,11 +6,10 @@
 *
 * Written by Andrey Hihlovskiy (akhikhl AT gmail DOT com).
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
-* Date: 13.06.2013
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.9
-* @requires gradle 1.8+, git 1.8+
+* @version 1.0.10
+* @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
 * https://github.com/akhikhl/multiproject-git-gradle
@@ -18,10 +17,10 @@
 
 buildscript {
   repositories { mavenCentral() }
-  dependencies { classpath 'org.ajoberstar:gradle-git:0.6.3' }
+  dependencies { classpath 'org.ajoberstar:gradle-git:0.8.0' }
 }
 
-import org.ajoberstar.gradle.git.tasks.*
+import org.ajoberstar.grgit.Grgit
 
 class MultiProjectExtension {
   String rootFolder
@@ -108,14 +107,29 @@ for(def e in project.multiproject.projects) {
   
   def projUpdateTask
   if(projFolder.exists()) {
-    projUpdateTask = task("${projName}_update", type: GitPull) {
-      repoPath = projFolder.absolutePath
+  
+    projUpdateTask = task("${projName}_update") {
+      doLast {
+        def grgit = Grgit.open(projFolder.absolutePath)
+        try {
+          grgit.pull()
+        } finally {
+          grgit.close()
+        }
+      }
     }
+    
     if(proj.branch)
-      task("${projName}_checkout", type: GitCheckout) { task ->
-        repoPath = projFolder.absolutePath
-        branchName = proj.branch
-        projUpdateTask.dependsOn task
+      task("${projName}_checkout") {
+        projUpdateTask.dependsOn it
+        doLast {
+          def grgit = Grgit.open(projFolder.absolutePath)
+          try {
+            grgit.checkout(branch: proj.branch)
+          } finally {
+            grgit.close()
+          }
+        }
       }
   } else {
     def gitSource
@@ -135,12 +149,15 @@ for(def e in project.multiproject.projects) {
       gitSource += proj.gitNameSeparator
       gitSource += gitName
     }
-    projUpdateTask = task("${projName}_update", type: GitClone) {
-      destinationPath = projFolder.absolutePath
-      uri = gitSource
-      if(proj.branch) {
-        checkout = true
-        branch = proj.branch
+    projUpdateTask = task("${projName}_update") {
+      doLast {
+        def grgit = Grgit.clone(dir: projFolder.absolutePath, uri: gitSource)
+        try {
+          if(proj.branch)
+            grgit.checkout(branch: proj.branch)
+        } finally {
+          grgit.close()
+        }
       }
     }
   }  
@@ -306,19 +323,34 @@ for(def e in project.multiproject.projects) {
       }
   }
 
-  task("${projName}_gitStatus", type: GitStatus) { task ->
-    description = "git status on ${projName}"
-    repoPath = projFolder.absolutePath
+  task("${projName}_gitStatus") { task ->
+    description = "git status on ${projName}"    
+    // repoPath = projFolder.absolutePath
     doLast {
-      [ 'added', 'changed', 'conflicting', 'missing', 'modified', 'removed', 'untracked' ].each { fileSetName ->
-        task[fileSetName].files.each { file ->
-          println "${fileSetName}: ${file.absolutePath}"
-        }
-      }
-      task.untrackedDirs.files.each { file ->
-        if(!task.ignored.files.contains(file))
-          println "untracked dir: ${file.absolutePath}"
-      }
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        def status = grgit.status()
+        def unstaged = status.unstaged
+        if(unstaged.added || unstaged.modified || unstaged.removed)
+          println '  unstaged:'
+        for(def f in unstaged.added)
+          println "    added $f"
+        for(def f in unstaged.modified)
+          println "    modified $f"
+        for(def f in unstaged.removed)
+          println "    removed $f"
+        def staged = status.staged
+        if(staged.added || staged.modified || staged.removed)
+          println '  staged:'
+        for(def f in staged.added)
+          println "    added $f"
+        for(def f in staged.modified)
+          println "    modified $f"
+        for(def f in staged.removed)
+          println "    removed $f"
+      } finally {
+        grgit.close()
+      }    
     }
     if(projFolder.exists())
       mustRunAfter projUpdateTask
@@ -328,15 +360,19 @@ for(def e in project.multiproject.projects) {
     gitStatus.dependsOn task
   }
 
-  task("${projName}_gitBranchList", type: GitBranchList) { task ->
+  task("${projName}_gitBranchList") { task ->
     description = "git branches on ${projName}"
-    repoPath = projFolder.absolutePath
     doLast {
-      branches.each { branch ->
-        if(branch.name == workingBranch.name)
-          print '* '
-        println branch.name
-      }
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        def branches = grgit.branch.list()
+        for(def branch in branches) {
+          print (branch == grgit.branch.current ? '* ' : '  ')
+          println branch.name
+        }
+      } finally {
+        grgit.close()
+      }    
     }
     if(projFolder.exists())
       mustRunAfter projUpdateTask
