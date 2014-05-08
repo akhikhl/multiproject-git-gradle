@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.10
+* @version 1.0.11
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -151,7 +151,7 @@ for(def e in project.multiproject.projects) {
     }
     projUpdateTask = task("${projName}_update") {
       doLast {
-        def grgit = Grgit.clone(dir: projFolder.absolutePath, uri: gitSource)
+        def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
         try {
           if(proj.branch)
             grgit.checkout(branch: proj.branch)
@@ -380,7 +380,7 @@ for(def e in project.multiproject.projects) {
       dependsOn projUpdateTask
     mustRunAfter update
     gitBranchList.dependsOn task
-  }  
+  }
 }
 
 // second pass, now we handle inter-project dependencies
