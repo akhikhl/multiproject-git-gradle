@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.11
+* @version 1.0.12
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -16,7 +16,10 @@
 **/
 
 buildscript {
-  repositories { mavenCentral() }
+  repositories { 
+    jcenter()
+    mavenCentral() 
+  }
   dependencies { classpath 'org.ajoberstar:gradle-git:0.8.0' }
 }
 
@@ -81,7 +84,9 @@ task build
 task buildExamples
 task buildApps
 task gitBranchList
+task gitCommit
 task gitStatus
+task gitPush
 task update
 task uploadArchives
 
@@ -381,6 +386,51 @@ for(def e in project.multiproject.projects) {
     mustRunAfter update
     gitBranchList.dependsOn task
   }
+
+  task("${projName}_gitCommit") { task ->
+    description = "git commit on ${projName}"
+    doLast {
+      if(!project.ext.has('message'))
+        throw new GradleException('Cannot commit: message is not specified')
+      boolean amend = project.ext.has('amend') ? (project.ext.amend as boolean) : false
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        def status = grgit.status()
+        if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+           status.staged.added || status.staged.modified || status.staged.removed) {
+          println "  Committing changes"
+          grgit.commit(all: true, message: project.ext.message, amend: amend)
+        }
+      } finally {
+        grgit.close()
+      }    
+    }
+    if(projFolder.exists())
+      mustRunAfter projUpdateTask
+    else
+      dependsOn projUpdateTask
+    mustRunAfter update
+    gitCommit.dependsOn task
+  }
+
+  task("${projName}_gitPush") { task ->
+    description = "git push on ${projName}"
+    doLast {
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        grgit.push()
+      } finally {
+        grgit.close()
+      }    
+    }
+    mustRunAfter "${projName}_gitCommit"
+    if(projFolder.exists())
+      mustRunAfter projUpdateTask
+    else
+      dependsOn projUpdateTask
+    mustRunAfter update
+    gitPush.dependsOn task
+  }  
 }
 
 // second pass, now we handle inter-project dependencies
@@ -431,3 +481,4 @@ for(def e in project.multiproject.projects) {
 }
 
 defaultTasks 'buildApps'
+
