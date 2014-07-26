@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.12
+* @version 1.0.13
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -33,7 +33,7 @@ class MultiProjectExtension {
   String gitNameSuffix = '.git'
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
-    gitBase = options.baseUrl
+    gitBase = options.baseUrl ?: options.baseDir
     def savedGitNameSeparator = gitNameSeparator
     gitNameSeparator = options.nameSeparator ?: options.gitNameSeparator ?: gitNameSeparator 
     def savedGitNameSuffix = gitNameSuffix
@@ -154,6 +154,8 @@ for(def e in project.multiproject.projects) {
       gitSource += proj.gitNameSeparator
       gitSource += gitName
     }
+    if(new File(gitSource).exists())
+      gitSource = new File(gitSource).toURI().toString()
     projUpdateTask = task("${projName}_update") {
       doLast {
         def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
