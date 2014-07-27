@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.16
+* @version 1.0.17
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -184,12 +184,20 @@ task releaseCommitNewVersions, dependsOn: releasePrepareNewVersions
 
 Map versionMap = [:]
 
+def getProjectKey = { String projName ->
+  projName.replaceAll(/[^0-9A-Za-z]/, '_')
+}
+
+def getVersionInfo = { String projName ->
+  versionMap[getProjectKey(projName)]
+}
+
 task ('afterRelease') {
   doLast {
     project.logger.warn 'Release is finished. The following projects were released:'
     project.logger.warn 'Project Name\t| Release Version\t| New Version'
-    versionMap.each { projName, versionInfo ->
-      project.logger.warn '{}\t| {}\t\t\t| {}', projName, versionInfo.releaseVersion, versionInfo.newVersion
+    versionMap.each { projKey, versionInfo ->
+      project.logger.warn '{}\t| {}\t\t\t| {}', versionInfo.originalProjectName, versionInfo.releaseVersion, versionInfo.newVersion
     }
   }
 }
@@ -582,7 +590,7 @@ project.multiproject.projects.each { projName, proj ->
 		        break
 		      }
 		    }
-		  versionMap[projName] = [ propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
+		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
     }
   }
 
@@ -591,7 +599,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter releaseCollectVersions
     releaseResolveVersions.dependsOn it
     doLast {
-      def thisVersion = versionMap[projName]
+      def thisVersion = getVersionInfo(projName)
       def releaseProperties = [:] + thisVersion.originalProperties
       releaseProperties.version = thisVersion.releaseVersion
       def newProperties = [:] + thisVersion.originalProperties
@@ -600,7 +608,7 @@ project.multiproject.projects.each { projName, proj ->
         def m = key =~ /(.+)_version$/
         if(m) {
           def otherProjName = m[0][1]
-          def otherProjVersion = versionMap[otherProjName]
+          def otherProjVersion = getVersionInfo(otherProjName)
           if(otherProjVersion) {
             releaseProperties[key] = otherProjVersion.releaseVersion
             newProperties[key] = otherProjVersion.newVersion
@@ -618,7 +626,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter releaseResolveVersions
     releasePrepareReleaseVersions.dependsOn it
     doLast {
-      def thisVersion = versionMap[projName]
+      def thisVersion = getVersionInfo(projName)
       project.logger.warn '{} : {} : setting release version', projName, thisVersion.releaseVersion
       def releaseProperties = new Properties() + thisVersion.releaseProperties
       thisVersion.propertiesFile.withOutputStream { releaseProperties.store(it, null) }
@@ -649,7 +657,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter releaseBuild
     releaseCreateReleaseTags.dependsOn it
     doLast {
-      def thisVersion = versionMap[projName]
+      def thisVersion = getVersionInfo(projName)
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
         if(proj.releaseNoCommit)
@@ -681,7 +689,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter releaseCreateReleaseTags
     releasePrepareNewVersions.dependsOn it
     doLast {
-      def thisVersion = versionMap[projName]
+      def thisVersion = getVersionInfo(projName)
       project.logger.warn '{} : {} : setting new version', projName, thisVersion.newVersion
       def newProperties = new Properties() + thisVersion.newProperties
       thisVersion.propertiesFile.withOutputStream { newProperties.store(it, null) }
@@ -693,7 +701,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter releasePrepareNewVersions
     releaseCommitNewVersions.dependsOn it
     doLast {
-      def thisVersion = versionMap[projName]
+      def thisVersion = getVersionInfo(projName)
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
         if(proj.releaseNoCommit)
