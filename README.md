@@ -21,6 +21,7 @@ which is used by multiproject-git-gradle.
   * [gitStatus task](#gitstatus-task)
   * [update task](#update-task)
   * [uploadArchives task](#uploadarchives-task)
+  * [release task](#release-task)
 * [Configuration](#configuration)  
   * [Specifying projects](#specifying-projects)
   * [Configuring inter-project dependencies](#configuring-inter-project-dependencies)
@@ -28,6 +29,15 @@ which is used by multiproject-git-gradle.
   * [Configuring build property](#configuring-build-property)
   * [Configuring apps property](#configuring-apps-property)
   * [Configuring examples property](#configuring-examples-property)
+* [Automated Release Feature (ARF)](#automated-release-feature)
+  * [ARF Requirements](#arf-requirements)
+  * [How to start using ARF](#how-to-start-using-arf)
+  * [ARF side effects](#arf-side-effects)
+  * [ARF release versions](#arf-release-versions)
+  * [ARF new versions](#arf-new-versions)
+  * [DSL for custom version increments](#dsl-for-custom-version-increments)
+  * [releaseNoPush property](#releasenopush-property)
+  * [releaseNoCommit property](#releasenocommit-property)
 * [Copyright and License](#copyright-and-license)
 
 ##Required files
@@ -133,6 +143,12 @@ Iterates all projects described in [configuration](#configuration), checks each 
 ###uploadArchives task
 
 TODO: document this task!
+
+### release task
+
+This task performs full release process on multiple git projects.
+
+See more information at [Automated Release Feature (ARF)](#automated-release-feature).
 
 ##Configuration
 
@@ -328,6 +344,172 @@ which will be run against the combined folder "$projectDir/examples".
 which will be run against the combined folder "$projectDir/$examples".
 
 * Otherwise "buildExamples" task is not defined for the given project.
+
+## Automated Release Feature
+
+Since version 1.0.12 multiproject-git-gradle implements Automated Release Feature (AFR), which allows to release the software from multiple git repositories.
+
+AFR is implemented as part of multiproject-git-gradle and accessible as a single task: "release". As with other tasks of multiproject-git-gradle, the file "config.gradle" defines upstream git repositories and inter-repository dependencies.
+
+### ARF Requirements
+
+1. All involved git repositories are required to have root "build.gradle", which includes [townsfolk/gradle-release](https://github.com/townsfolk/gradle-release) plugin.
+
+2. All involved git repositories are required to have "gradle.properties" file, containing at least "version" property. 
+
+3. AFR uses and updates versions exlusively via "gradle.properties" file. It is expected that none of "build.gradle" files (either at the roots of git-repositories or in subprojects) contain any "hardcoded" dependency versions to the artifacts of another git repository. Any inter-repository dependencies should be managed via dependencies of kind: compile "group:artifact:${repoName}_version", where "${repoName}_version" is defined as property in "gradle.properties" and repoName is the name of existing git repository listed in "config.gradle".
+
+### How to start using ARF
+
+1. Add townsfolk/gradle-release plugin to root "build.gradle" of every git repository.
+
+2. Add "gradle.properties" with at least "version" property to every git repository.
+
+3. Convert all inter-repository dependencies to managed dependencies with versions in "gradle.properties" in the format "${repoName}_version=versionValue".
+
+### ARF side effects
+
+1. ARF performs all standard checks (implemented by townsfolk/gradle-release plugin) against all involved git repositories. If any check fails, the whole release process is cancelled and error message is shown.
+
+2. ARF modifies "gradle.properties" files of all involved git repositories, replacing current versions with release versions. See section [ARF release versions](#arf-release-versions) for details.
+
+3. ARF checks for the presence of snapshot dependencies in all involved git repositories. If some git repositories contain snapshot dependencies, the whole release process is cancelled and error message is shown.
+
+4. ARF builds code in all involved git repositories. The inter-repository order of build is defined by "config.gradle".
+
+5. ARF performs the following in each git repository: creates a commit, creates a release tag and pushes to the origin. Push can be disabled by [releaseNoPush property](#releasenopush-property). Commit can be disabled by [releaseNoCommit property](#releasenocommit-property).
+
+6. ARF modifies "gradle.properties" files of all involved git repositories, replacing current versions with new versions. See section [ARF new versions](#arf-new-versions) for details.
+
+7. ARF performs the following in each git repository: creates a commit and pushes to the origin. Push can be disabled by [releaseNoPush property](#releasenopush-property). Commit can be disabled by [releaseNoCommit property](#releasenocommit-property).
+
+8. ARF restores the changed "gradle.properties" files to their original state in case of errors.
+
+9. ARF can clone some or all repositories (mentioned in "config.gradle") from upstream locations, if they are not already present in the root directory.
+
+10. If some repositories are already present in the root directory, automated release feature will perform git-pull on them.
+
+### ARF release versions
+
+ARF uses the following algorithm for defining release version:
+
+It takes "version" property from the given project and matches it against regex:
+
+```regex
+/(\d+)([^\d]*$)/
+```
+
+if project version matches this pattern, the release version is calculated as:
+
+```groovy
+m.replaceAll(m[0][1])
+```
+
+where m is an object of class java.util.regex.Matcher (the result of regex match).
+
+Example: if original version is "1.0-SNAPSHOT", the calculated release version will be "1.0".
+
+### ARF new versions
+
+ARF uses the following algorithm for defining new version:
+
+It takes "version" property from the given project and matches it against regex:
+
+```regex
+/(\d+)([^\d]*$)/
+```
+
+if project version matches this pattern, the new version is calculated as:
+
+```groovy
+m.replaceAll("${ (m[0][1] as int) + 1 }${ m[0][2] }") }
+```
+
+where m is an object of class java.util.regex.Matcher (the result of regex match).
+
+Example: if original version is "1.0-SNAPSHOT", the calculated new version will be "1.1-SNAPSHOT".
+
+### DSL for custom version increments
+
+You can define your own rules for release version and new version with the help of multiproject-git-gradle DSL:
+
+```groovy
+multiproject {
+  git baseDir: 'upstream_repos', {
+    project name: 'project1'
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ], {
+      releaseVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-RELEASE") })
+      newVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-UNSTABLE") })
+    }
+  }
+}
+```
+
+in this example we define that project2 gets release versions that look like "X.Y-RELEASE" and new versions that look like "X.Y-UNSTABLE".
+
+releaseVersion and newVersion elements are actually functions, accepting two arguments: first one is regex, second one is closure.
+
+Closure is only invoked when the given regex is successfully matched against "version" property of "gradle.properties" file. Closure receives an object of class java.util.regex.Matcher (the result of regex match) as a parameter. Closure must return a string (or an object meaningfully convertible to string) containing version.
+
+It is possible to specify "global" releaseVersion and newVersion elements:
+
+```groovy
+multiproject {
+  releaseVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-release") })
+  newVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-unstable") })
+  git baseDir: 'upstream_repos', {
+    project name: 'project1'
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ], {
+      releaseVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-RELEASE") })
+      newVersion(/(\d+)([^\d]*$)/, { m -> m.replaceAll("${ m[0][1] }-UNSTABLE") })
+    }
+  }
+}
+```
+
+in this example we define that project1 and project3 get gets release versions that look like "X.Y-release" and new versions that look like "X.Y-unstable", while project2 gets release versions that look like "X.Y-RELEASE" and new versions that look like "X.Y-UNSTABLE".
+
+It is possible to specify multiple releaseVersion and newVersion elements in the same scope, each one with it's own regex and closure.
+
+If there are multiple releaseVersion elements with the same regex in the same scope, only the last one is used, the previous ones are ignored.
+
+If there are multiple newVersion elements with the same regex in the same scope, only the last one is used, the previous ones are ignored.
+
+### releaseNoPush property
+
+releaseNoPush boolean property could be defined either in context of multiproject element or in context of project element:
+
+```groovy
+multiproject {
+  releaseNoPush = true
+  git baseDir: 'upstream_repos', {
+    project name: 'project1', releaseNoPush: true
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ]
+  }
+}
+```
+
+when releaseNoPush=true, ARF commits release and new versions, but does not push anything upstream.
+
+### releaseNoCommit property
+
+releaseNoCommit boolean property could be defined either in context of multiproject element or in context of project element:
+
+```groovy
+multiproject {
+  releaseNoCommit = true
+  git baseDir: 'upstream_repos', {
+    project name: 'project1', releaseNoCommit: true
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ]
+  }
+}
+```
+
+when releaseNoCommit=true, ARF does not commit nor push release and new versions.
 
 ##Copyright and License
 
