@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.19
+* @version 1.0.20
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -165,6 +165,7 @@ task gitBranchList
 task gitCommit
 task gitPush
 task gitStatus
+task nuke
 task update
 task uploadArchives
 
@@ -227,60 +228,42 @@ project.multiproject.projects.each { projName, proj ->
 
   File projFolder = new File(rootFolder, new File(projName).getName())
   
-  def projUpdateTask
-  if(projFolder.exists()) {
-  
-    projUpdateTask = task("${projName}_update") {
-      update.dependsOn it
-      doLast {
+  def projUpdateTask = task("${projName}_update") {
+    update.dependsOn it
+    mustRunAfter nuke
+    doLast {
+      if(projFolder.exists()) {
         def grgit = Grgit.open(projFolder.absolutePath)
         try {
+          if(proj.branch)
+            grgit.checkout(branch: proj.branch, createBranch: true)
           grgit.pull()
         } finally {
           grgit.close()
         }
-      }
-    }
-    
-    if(proj.branch)
-      task("${projName}_checkout") {
-        projUpdateTask.dependsOn it
-        doLast {
-          def grgit = Grgit.open(projFolder.absolutePath)
-          try {
-            grgit.checkout(branch: proj.branch)
-          } finally {
-            grgit.close()
-          }
+      } else {
+        def gitSource
+        if(proj.gitSource)
+          gitSource = proj.gitSource 
+        else {
+          def gitName = proj.gitName ?: projName
+          gitName += proj.gitNameSuffix      
+          def gitBase
+          if(proj.gitBase)
+            gitBase = proj.gitBase
+          else if(project.multiproject.gitBase)
+            gitBase = project.multiproject.gitBase
+          else
+            throw new GradleException("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.")
+          gitSource = gitBase
+          gitSource += proj.gitNameSeparator
+          gitSource += gitName
         }
-      }
-  } else {
-    def gitSource
-    if(proj.gitSource)
-      gitSource = proj.gitSource 
-    else {
-      def gitName = proj.gitName ?: projName
-      gitName += proj.gitNameSuffix      
-      def gitBase
-      if(proj.gitBase)
-        gitBase = proj.gitBase
-      else if(project.multiproject.gitBase)
-        gitBase = project.multiproject.gitBase
-      else
-        throw new Exception("Don't know from where to clone project '$projName'. Please specify gitBase or gitSource.")
-      gitSource = gitBase
-      gitSource += proj.gitNameSeparator
-      gitSource += gitName
-    }
-    if(new File(gitSource).exists())
-      gitSource = new File(gitSource).toURI().toString()
-    projUpdateTask = task("${projName}_update") {
-      update.dependsOn it
-      doLast {
+        if(new File(gitSource).exists())
+          gitSource = new File(gitSource).toURI().toString()
         def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
         try {
           if(proj.branch) {
-            println "DBG branch: ${proj.branch}"
             grgit.checkout(branch: proj.branch, createBranch: true)
           }
         } finally {
@@ -288,7 +271,7 @@ project.multiproject.projects.each { projName, proj ->
         }
       }
     }
-  }  
+  }
   
   boolean shouldBuild = proj.build == null || proj.build
   boolean buildSelfDefined = proj.build == null || (proj.build instanceof Boolean && proj.build)
@@ -298,10 +281,14 @@ project.multiproject.projects.each { projName, proj ->
     projBuildTask = task("${projName}_build", type: GradleBuild) {
       description = "Builds the project $projName"
       build.dependsOn it
-      if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      mustRunAfter {
+        if(projFolder.exists())
+          [ projUpdateTask ]
+      }
+      dependsOn {
+        if(!projFolder.exists())
+          [ projUpdateTask ]
+      }
       if(buildSelfDefined)
         dir = projFolder
       else {
@@ -316,10 +303,14 @@ project.multiproject.projects.each { projName, proj ->
     projCleanTask = task("${projName}_clean", type: GradleBuild) {
       description = "Cleans the project $projName"
       clean.dependsOn it
-      if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      mustRunAfter {
+        if(projFolder.exists())
+          [ projUpdateTask ]
+      }
+      dependsOn {
+        if(!projFolder.exists())
+          [ projUpdateTask ]
+      }
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'clean' ]
     }
@@ -327,10 +318,14 @@ project.multiproject.projects.each { projName, proj ->
       task("${projName}_installContribs", type: GradleBuild) {
         description = "Installs contributions in project $projName"
         projBuildTask.dependsOn it
-        if(projFolder.exists())
-          mustRunAfter projUpdateTask
-        else
-          dependsOn projUpdateTask      
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -346,10 +341,14 @@ project.multiproject.projects.each { projName, proj ->
         description = "Cleans contributions in project $projName"
         clean.dependsOn it
         dependsOn projCleanTask
-        if(projFolder.exists())
-          mustRunAfter projUpdateTask
-        else
-          dependsOn projUpdateTask      
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -362,9 +361,15 @@ project.multiproject.projects.each { projName, proj ->
         tasks = [ 'clean' ]
       }
     }
-  } else if(!projFolder.exists()) {
-    build.dependsOn projUpdateTask
-    clean.dependsOn projUpdateTask
+  } else {
+    build.dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
+    clean.dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
   }
 
   if(proj.examples) {
@@ -374,10 +379,16 @@ project.multiproject.projects.each { projName, proj ->
       buildExamples.dependsOn it
       if(projBuildTask)
         dependsOn projBuildTask
-      else if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask      
+      else {
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
+      }
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'build' ]
     }
@@ -387,10 +398,16 @@ project.multiproject.projects.each { projName, proj ->
       clean.dependsOn it
       if(projCleanTask)
         projCleanTask.dependsOn it
-      else if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      else {
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
+      }
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'clean' ]
     }
@@ -403,10 +420,16 @@ project.multiproject.projects.each { projName, proj ->
       buildApps.dependsOn it
       if(projBuildTask)
         dependsOn projBuildTask
-      else if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      else {
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
+      }
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'build' ]
     }
@@ -416,10 +439,16 @@ project.multiproject.projects.each { projName, proj ->
       clean.dependsOn it
       if(projCleanTask)
         projCleanTask.dependsOn it
-      else if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      else {
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
+      }
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'clean' ]
     }
@@ -432,10 +461,16 @@ project.multiproject.projects.each { projName, proj ->
       uploadArchives.dependsOn it
       if(projBuildTask)
         dependsOn projBuildTask
-      else if(projFolder.exists())
-        mustRunAfter projUpdateTask
-      else
-        dependsOn projUpdateTask
+      else {
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
+      }
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'uploadArchives' ]
     }
@@ -443,10 +478,14 @@ project.multiproject.projects.each { projName, proj ->
       task("${projName}_uploadContribs", type: GradleBuild) {
         description = "Uploads contributions of project $projName"
         uploadArchivesTask.dependsOn it
-        if(projFolder.exists())
-          mustRunAfter projUpdateTask
-        else
-          dependsOn projUpdateTask      
+        mustRunAfter {
+          if(projFolder.exists())
+            [ projUpdateTask ]
+        }
+        dependsOn {
+          if(!projFolder.exists())
+            [ projUpdateTask ]
+        }
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -462,10 +501,14 @@ project.multiproject.projects.each { projName, proj ->
 
   task("${projName}_gitStatus") {
     description = "git status on ${projName}"    
-    if(projFolder.exists())
-      mustRunAfter projUpdateTask
-    else
-      dependsOn projUpdateTask
+    mustRunAfter {
+      if(projFolder.exists())
+        [ projUpdateTask ]
+    }
+    dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
     mustRunAfter update
     gitStatus.dependsOn it
     doLast {
@@ -498,10 +541,14 @@ project.multiproject.projects.each { projName, proj ->
 
   task("${projName}_gitBranchList") {
     description = "git branches on ${projName}"
-    if(projFolder.exists())
-      mustRunAfter projUpdateTask
-    else
-      dependsOn projUpdateTask
+    mustRunAfter {
+      if(projFolder.exists())
+        [ projUpdateTask ]
+    }
+    dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
     mustRunAfter update
     gitBranchList.dependsOn it
     doLast {
@@ -520,10 +567,14 @@ project.multiproject.projects.each { projName, proj ->
 
   task("${projName}_gitCommit") {
     description = "git commit on ${projName}"
-    if(projFolder.exists())
-      mustRunAfter projUpdateTask
-    else
-      dependsOn projUpdateTask
+    mustRunAfter {
+      if(projFolder.exists())
+        [ projUpdateTask ]
+    }
+    dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
     mustRunAfter update
     gitCommit.dependsOn it
     doLast {
@@ -547,10 +598,14 @@ project.multiproject.projects.each { projName, proj ->
   task("${projName}_gitPush") {
     description = "git push on ${projName}"
     mustRunAfter "${projName}_gitCommit"
-    if(projFolder.exists())
-      mustRunAfter projUpdateTask
-    else
-      dependsOn projUpdateTask
+    mustRunAfter {
+      if(projFolder.exists())
+        [ projUpdateTask ]
+    }
+    dependsOn {
+      if(!projFolder.exists())
+        [ projUpdateTask ]
+    }
     mustRunAfter update
     gitPush.dependsOn it
     doLast {
@@ -560,6 +615,14 @@ project.multiproject.projects.each { projName, proj ->
       } finally {
         grgit.close()
       }    
+    }
+  }
+
+  task("${projName}_nuke") {
+    description = "deletes local repository ${projName}"
+    nuke.dependsOn it
+    doLast {
+      projFolder.deleteDir()
     }
   }
 
