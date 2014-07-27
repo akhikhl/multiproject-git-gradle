@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.18
+* @version 1.0.19
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -76,6 +76,7 @@ class MultiProjectExtension {
   def newVersion = [ /(\d+)([^\d]*$)/ : { Matcher m -> m.replaceAll("${ (m[0][1] as int) + 1 }${ m[0][2] }") } ]
   Boolean releaseNoCommit
   Boolean releaseNoPush
+  String branch
   
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
@@ -131,6 +132,8 @@ class MultiProjectExtension {
       proj.releaseNoCommit = releaseNoCommit == null ? (hostProject.ext.has('releaseNoCommit') ? hostProject.ext.releaseNoCommit : false) : releaseNoCommit
     if(proj.releaseNoPush == null)
       proj.releaseNoPush = releaseNoPush == null ? (hostProject.ext.has('releaseNoPush') ? hostProject.ext.releaseNoPush : false) : releaseNoPush
+    if(proj.branch == null)
+      proj.branch = branch
     projects[projName] = proj
   }
   
@@ -276,8 +279,10 @@ project.multiproject.projects.each { projName, proj ->
       doLast {
         def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
         try {
-          if(proj.branch)
-            grgit.checkout(branch: proj.branch)
+          if(proj.branch) {
+            println "DBG branch: ${proj.branch}"
+            grgit.checkout(branch: proj.branch, createBranch: true)
+          }
         } finally {
           grgit.close()
         }
@@ -563,7 +568,7 @@ project.multiproject.projects.each { projName, proj ->
     mustRunAfter update
     releaseChecks.dependsOn it
     dir = projFolder
-    tasks = [ 'initScmPlugin', 'checkCommitNeeded', 'checkUpdateNeeded' ]
+    tasks = [ 'checkCommitNeeded', 'checkUpdateNeeded' ]
   }
 
   task("${projName}_releaseCollectVersions") {
