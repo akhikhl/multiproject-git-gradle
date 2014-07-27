@@ -181,9 +181,23 @@ task releaseBuild, dependsOn: releaseCheckSnapshotDependencies
 task releaseCreateReleaseTags, dependsOn: releaseBuild
 task releasePrepareNewVersions, dependsOn: releaseCreateReleaseTags
 task releaseCommitNewVersions, dependsOn: releasePrepareNewVersions
-task release, dependsOn: releaseCommitNewVersions
 
 Map versionMap = [:]
+
+task ('afterRelease') {
+  doLast {
+    project.logger.warn 'Release is finished. The following projects were released:'
+    project.logger.warn 'Project Name\t| Release Version\t| New Version'
+    versionMap.each { projName, versionInfo ->
+      project.logger.warn '{}\t| {}\t\t\t| {}', projName, versionInfo.releaseVersion, versionInfo.newVersion
+    }
+  }
+}
+
+task('release') {
+  dependsOn releaseCommitNewVersions
+  finalizedBy afterRelease
+}
 
 // automated release feature --
 
