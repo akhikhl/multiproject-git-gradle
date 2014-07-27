@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.13
+* @version 1.0.14
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -24,6 +24,44 @@ buildscript {
 }
 
 import org.ajoberstar.grgit.Grgit
+import java.util.regex.Matcher
+
+boolean isString(x) { 
+  x instanceof String || x instanceof GString 
+}
+
+def isCollection(obj) {
+  return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
+}
+
+def toCollection(obj) {
+  return isCollection(obj) ? obj : [ obj ]
+}
+
+class Project extends Expando {
+
+  def releaseVersion
+  def newVersion
+
+  Project() {
+  }
+
+  Project(Map properties) {
+    super(properties)
+  }
+  
+  void newVersion(String regex, Closure closure) {
+    if(newVersion == null)
+      newVersion = [:]
+    newVersion[regex] = closure
+  }
+  
+  void releaseVersion(String regex, Closure closure) {
+    if(releaseVersion == null)
+      releaseVersion = [:]
+    releaseVersion[regex] = closure
+  }
+}
 
 class MultiProjectExtension {
   String rootFolder
@@ -31,6 +69,9 @@ class MultiProjectExtension {
   String gitBase
   String gitNameSeparator = '/'
   String gitNameSuffix = '.git'
+  def releaseVersion = [ /(\d+)([^\d]*$)/ : { Matcher m -> m.replaceAll(m[0][1]) } ]
+  def newVersion = [ /(\d+)([^\d]*$)/ : { Matcher m -> m.replaceAll("${ (m[0][1] as int) + 1 }${ m[0][2] }") } ]
+  
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
     gitBase = options.baseUrl ?: options.baseDir
@@ -39,32 +80,54 @@ class MultiProjectExtension {
     def savedGitNameSuffix = gitNameSuffix
     gitNameSuffix = options.nameSuffix ?: options.gitNameSuffix ?: gitNameSuffix
     closure.delegate = this
+    closure.resolveStrategy = Closure.DELEGATE_FIRST
     closure()
     gitNameSuffix = savedGitNameSuffix
     gitNameSeparator = savedGitNameSeparator
     gitBase = savedGitBase
   }
-  def project(proj) {
+  
+  boolean isString(x) { 
+    x instanceof String || x instanceof GString 
+  }  
+  
+  void newVersion(String regex, Closure closure) {
+    newVersion[regex] = closure
+  }
+  
+  def project(proj, Closure closure = null) {
     String projName = isString(proj) ? proj : proj.name
     if(projects.containsKey(projName))
       throw new Exception("Duplicate project definition: $projName")
     if(isString(proj))
-      proj = [ name: proj as String ]
+      proj = new Project([ name: proj as String ])
+    else
+      proj = new Project(proj)
+    if(closure) {
+      closure.delegate = proj
+      closure.resolveStrategy = Closure.DELEGATE_FIRST
+      closure()
+    }
     if(!proj.gitBase && !proj.gitSource)
       proj.gitBase = gitBase
     if(!proj.gitNameSeparator && !proj.gitSource)
       proj.gitNameSeparator = gitNameSeparator
     if(!proj.gitNameSuffix && !proj.gitSource)
       proj.gitNameSuffix = gitNameSuffix
+    if(!proj.releaseVersion)
+      proj.releaseVersion = releaseVersion
+    else if(releaseVersion instanceof Map && proj.releaseVersion instanceof Map)
+      proj.releaseVersion = releaseVersion + proj.releaseVersion
+    if(!proj.newVersion)
+      proj.newVersion = newVersion
+    else if(newVersion instanceof Map && proj.newVersion instanceof Map)
+      proj.newVersion = newVersion + proj.newVersion
     projects[projName] = proj
   }
-  boolean isString(x) { 
-    x instanceof String || x instanceof GString 
-  }  
-}
-
-boolean isString(x) { 
-  x instanceof String || x instanceof GString 
+  
+  void releaseVersion(String regex, Closure closure) {
+    releaseVersion[regex] = closure
+  }
 }
 
 project.extensions.create 'multiproject', MultiProjectExtension
@@ -80,13 +143,15 @@ if(project.ext.has('extraConfig')) {
   }
 }
 
+def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : project.projectDir)
+
 task build
-task buildExamples
 task buildApps
+task buildExamples
 task gitBranchList
 task gitCommit
-task gitStatus
 task gitPush
+task gitStatus
 task update
 task uploadArchives
 
@@ -95,25 +160,33 @@ if(!tasks.findByName('clean'))
 
 clean.mustRunAfter update
 
-def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : project.projectDir)
+// automated release feature ++
 
-def isCollection(obj) {
-  return [Collection, Object[]].any { it.isAssignableFrom(obj.getClass()) }
-}
+task releaseChecks, dependsOn: update
+task releaseCollectVersions, dependsOn: releaseChecks
+task releaseResolveVersions, dependsOn: releaseCollectVersions
+task releasePrepareReleaseVersions, dependsOn: releaseResolveVersions
+task releaseCheckSnapshotDependencies, dependsOn: releasePrepareReleaseVersions
+task releaseBuild, dependsOn: releaseCheckSnapshotDependencies
+task releaseCreateReleaseTags, dependsOn: releaseBuild
+task releasePrepareNewVersions, dependsOn: releaseCreateReleaseTags
+task releaseCommitNewVersions, dependsOn: releasePrepareNewVersions
+task release, dependsOn: releaseCommitNewVersions
 
-def toCollection(obj) {
-  return isCollection(obj) ? obj : [ obj ]
-}
+Map versionMap = [:]
 
-for(def e in project.multiproject.projects) {  
-  String projName = e.key
-  def proj = e.value  
+// automated release feature --
+
+// first pass, we create per-project tasks
+project.multiproject.projects.each { projName, proj ->
+
   File projFolder = new File(rootFolder, new File(projName).getName())
   
   def projUpdateTask
   if(projFolder.exists()) {
   
     projUpdateTask = task("${projName}_update") {
+      update.dependsOn it
       doLast {
         def grgit = Grgit.open(projFolder.absolutePath)
         try {
@@ -157,6 +230,7 @@ for(def e in project.multiproject.projects) {
     if(new File(gitSource).exists())
       gitSource = new File(gitSource).toURI().toString()
     projUpdateTask = task("${projName}_update") {
+      update.dependsOn it
       doLast {
         def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
         try {
@@ -168,14 +242,19 @@ for(def e in project.multiproject.projects) {
       }
     }
   }  
-  update.dependsOn projUpdateTask
   
   boolean shouldBuild = proj.build == null || proj.build
   boolean buildSelfDefined = proj.build == null || (proj.build instanceof Boolean && proj.build)
   def projBuildTask = null
   def projCleanTask = null
   if(shouldBuild) {
-    projBuildTask = task("${projName}_build", type: GradleBuild) { task ->
+    projBuildTask = task("${projName}_build", type: GradleBuild) {
+      description = "Builds the project $projName"
+      build.dependsOn it
+      if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       if(buildSelfDefined)
         dir = projFolder
       else {
@@ -185,24 +264,26 @@ for(def e in project.multiproject.projects) {
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = proj.buildTasks ? proj.buildTasks : [ 'build' ]
-      build.dependsOn task
-      if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
+      tasks = proj.buildTasks ?: [ 'build' ]
     }
-    projCleanTask = task("${projName}_clean", type: GradleBuild) { task ->
+    projCleanTask = task("${projName}_clean", type: GradleBuild) {
+      description = "Cleans the project $projName"
+      clean.dependsOn it
+      if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'clean' ]
-      clean.dependsOn task
-      if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
     }
     if(proj.contribs) {
-      task("${projName}_installContribs", type: GradleBuild) { task ->
+      task("${projName}_installContribs", type: GradleBuild) {
+        description = "Installs contributions in project $projName"
+        projBuildTask.dependsOn it
+        if(projFolder.exists())
+          mustRunAfter projUpdateTask
+        else
+          dependsOn projUpdateTask      
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -213,13 +294,15 @@ for(def e in project.multiproject.projects) {
         else
           dir = "$projFolder/contribs"
         tasks = [ 'install' ]
-        projBuildTask.dependsOn task
-        if(projFolder.exists())
-          task.mustRunAfter projUpdateTask
-        else
-          task.dependsOn projUpdateTask      
       }
-      task("${projName}_cleanContribs", type: GradleBuild) { task ->
+      task("${projName}_cleanContribs", type: GradleBuild) {
+        description = "Cleans contributions in project $projName"
+        clean.dependsOn it
+        dependsOn projCleanTask
+        if(projFolder.exists())
+          mustRunAfter projUpdateTask
+        else
+          dependsOn projUpdateTask      
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -230,12 +313,6 @@ for(def e in project.multiproject.projects) {
         else
           dir = "$projFolder/contribs"
         tasks = [ 'clean' ]
-        clean.dependsOn task
-        task.dependsOn projCleanTask
-        if(projFolder.exists())
-          task.mustRunAfter projUpdateTask
-        else
-          task.dependsOn projUpdateTask      
       }
     }
   } else if(!projFolder.exists()) {
@@ -244,74 +321,85 @@ for(def e in project.multiproject.projects) {
   }
 
   if(proj.examples) {
-    task("${projName}_buildExamples", type: GradleBuild) { task ->
+    task("${projName}_buildExamples", type: GradleBuild) {
+      description = "Builds examples in project $projName"
+      dependsOn build
+      buildExamples.dependsOn it
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask      
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'build' ]
-      task.dependsOn build
-      buildExamples.dependsOn task
-      if(projBuildTask)
-        task.dependsOn projBuildTask
-      else if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask      
     }
 
-    task("${projName}_cleanExamples", type: GradleBuild) { task ->
+    task("${projName}_cleanExamples", type: GradleBuild) {
+      description = "Cleans examples in project $projName"
+      clean.dependsOn it
+      if(projCleanTask)
+        projCleanTask.dependsOn it
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'clean' ]
-      clean.dependsOn task
-      if(projCleanTask)
-        projCleanTask.dependsOn task
-      else if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
     }
   }
   
   if(proj.apps) {
-    task("${projName}_buildApps", type: GradleBuild) { task ->
+    task("${projName}_buildApps", type: GradleBuild) {
+      description = "Builds applications in project $projName"
+      dependsOn build
+      buildApps.dependsOn it
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'build' ]
-      dependsOn build
-      buildApps.dependsOn task
-      if(projBuildTask)
-        task.dependsOn projBuildTask
-      else if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
     }
 
-    task("${projName}_cleanApps", type: GradleBuild) { task ->
+    task("${projName}_cleanApps", type: GradleBuild) {
+      description = "Cleans applications in project $projName"
+      clean.dependsOn it
+      if(projCleanTask)
+        projCleanTask.dependsOn it
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'clean' ]
-      clean.dependsOn task
-      if(projCleanTask)
-        projCleanTask.dependsOn task
-      else if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
     }
   }
 
   if(proj.uploadArchives || buildSelfDefined) {
-    def uploadArchivesTask = task("${projName}_uploadArchives", type: GradleBuild) { task ->
+    def uploadArchivesTask = task("${projName}_uploadArchives", type: GradleBuild) {
+      description = "Uploads archives of project $projName"
+      dependsOn build
+      uploadArchives.dependsOn it
+      if(projBuildTask)
+        dependsOn projBuildTask
+      else if(projFolder.exists())
+        mustRunAfter projUpdateTask
+      else
+        dependsOn projUpdateTask
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'uploadArchives' ]
-      dependsOn build
-      uploadArchives.dependsOn task
-      if(projBuildTask)
-        task.dependsOn projBuildTask
-      else if(projFolder.exists())
-        task.mustRunAfter projUpdateTask
-      else
-        task.dependsOn projUpdateTask
     }
     if(proj.contribs)
-      task("${projName}_uploadContribs", type: GradleBuild) { task ->
+      task("${projName}_uploadContribs", type: GradleBuild) {
+        description = "Uploads contributions of project $projName"
+        uploadArchivesTask.dependsOn it
+        if(projFolder.exists())
+          mustRunAfter projUpdateTask
+        else
+          dependsOn projUpdateTask      
         if(isString(proj.contribs)) {
           proj.contribs = proj.contribs as String
           if(proj.contribs.endsWith('.gradle'))
@@ -322,17 +410,17 @@ for(def e in project.multiproject.projects) {
         else
           dir = "$projFolder/contribs"
         tasks = [ 'uploadArchives' ]
-        uploadArchivesTask.dependsOn task
-        if(projFolder.exists())
-          task.mustRunAfter projUpdateTask
-        else
-          task.dependsOn projUpdateTask      
       }
   }
 
-  task("${projName}_gitStatus") { task ->
+  task("${projName}_gitStatus") {
     description = "git status on ${projName}"    
-    // repoPath = projFolder.absolutePath
+    if(projFolder.exists())
+      mustRunAfter projUpdateTask
+    else
+      dependsOn projUpdateTask
+    mustRunAfter update
+    gitStatus.dependsOn it
     doLast {
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
@@ -359,16 +447,16 @@ for(def e in project.multiproject.projects) {
         grgit.close()
       }    
     }
+  }
+
+  task("${projName}_gitBranchList") {
+    description = "git branches on ${projName}"
     if(projFolder.exists())
       mustRunAfter projUpdateTask
     else
       dependsOn projUpdateTask
     mustRunAfter update
-    gitStatus.dependsOn task
-  }
-
-  task("${projName}_gitBranchList") { task ->
-    description = "git branches on ${projName}"
+    gitBranchList.dependsOn it
     doLast {
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
@@ -381,16 +469,16 @@ for(def e in project.multiproject.projects) {
         grgit.close()
       }    
     }
+  }
+
+  task("${projName}_gitCommit") {
+    description = "git commit on ${projName}"
     if(projFolder.exists())
       mustRunAfter projUpdateTask
     else
       dependsOn projUpdateTask
     mustRunAfter update
-    gitBranchList.dependsOn task
-  }
-
-  task("${projName}_gitCommit") { task ->
-    description = "git commit on ${projName}"
+    gitCommit.dependsOn it
     doLast {
       if(!project.ext.has('message'))
         throw new GradleException('Cannot commit: message is not specified')
@@ -400,23 +488,24 @@ for(def e in project.multiproject.projects) {
         def status = grgit.status()
         if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
            status.staged.added || status.staged.modified || status.staged.removed) {
-          println "  Committing changes"
+          project.logger.info 'Committing changes'
           grgit.commit(all: true, message: project.ext.message, amend: amend)
         }
       } finally {
         grgit.close()
       }    
     }
+  }
+
+  task("${projName}_gitPush") {
+    description = "git push on ${projName}"
+    mustRunAfter "${projName}_gitCommit"
     if(projFolder.exists())
       mustRunAfter projUpdateTask
     else
       dependsOn projUpdateTask
     mustRunAfter update
-    gitCommit.dependsOn task
-  }
-
-  task("${projName}_gitPush") { task ->
-    description = "git push on ${projName}"
+    gitPush.dependsOn it
     doLast {
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
@@ -425,20 +514,172 @@ for(def e in project.multiproject.projects) {
         grgit.close()
       }    
     }
-    mustRunAfter "${projName}_gitCommit"
-    if(projFolder.exists())
-      mustRunAfter projUpdateTask
-    else
-      dependsOn projUpdateTask
+  }
+
+  task("${projName}_releaseChecks", type: GradleBuild) {
+    description = "Do checks before release of ${projName}"
     mustRunAfter update
-    gitPush.dependsOn task
-  }  
-}
+    releaseChecks.dependsOn it
+    dir = projFolder
+    tasks = [ 'initScmPlugin', 'checkCommitNeeded', 'checkUpdateNeeded' ]
+  }
+
+  task("${projName}_releaseCollectVersions") {
+    description = "Collect versions before release of ${projName}"
+    mustRunAfter releaseChecks
+    releaseCollectVersions.dependsOn it
+    doLast {
+      File propertiesFile = new File(projFolder, 'gradle.properties')
+      if(!propertiesFile.exists())
+        throw new GradleException("File ${propertiesFile} does not exist. Could not release.")
+		  Properties properties = new Properties()
+		  propertiesFile.withInputStream { properties.load(it) }
+		  if(!properties.version)
+        throw new GradleException("'version' property is not defined in ${propertiesFile}. Could not release.")
+		  String releaseVersion
+		  if(proj.releaseVersion instanceof String)
+		    releaseVersion = proj.releaseVersion
+		  else if(proj.releaseVersion instanceof Map)
+		    for(def e in proj.releaseVersion) {
+		      def m = properties.version =~ e.key
+		      if(m) {
+            releaseVersion = e.value(m)		      
+		        break
+		      }
+		    }
+		  String newVersion
+		  if(proj.newVersion instanceof String)
+		    newVersion = proj.newVersion
+		  else if(proj.newVersion instanceof Map)
+		    for(def e in proj.newVersion) {
+		      def m = properties.version =~ e.key
+		      if(m) {
+            newVersion = e.value(m)		      
+		        break
+		      }
+		    }
+		  versionMap[projName] = [ propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
+    }
+  }
+
+  task("${projName}_releaseResolveVersions") {
+    description = "Resolve versions before release of ${projName}"
+    mustRunAfter releaseCollectVersions
+    releaseResolveVersions.dependsOn it
+    doLast {
+      def thisVersion = versionMap[projName]
+      def releaseProperties = [:] + thisVersion.originalProperties
+      releaseProperties.version = thisVersion.releaseVersion
+      def newProperties = [:] + thisVersion.originalProperties
+      newProperties.version = thisVersion.newVersion
+      thisVersion.originalProperties.each { key, value ->
+        def m = key =~ /(.+)_version$/
+        if(m) {
+          def otherProjName = m[0][1]
+          def otherProjVersion = versionMap[otherProjName]
+          if(otherProjVersion) {
+            releaseProperties[key] = otherProjVersion.releaseVersion
+            newProperties[key] = otherProjVersion.newVersion
+          } else
+            project.logger.warn 'File {} contains property {} that refers to a non-existing project {}.', thisVersion.propertiesFile, key, otherProjName
+        }
+      }
+      thisVersion.releaseProperties = releaseProperties
+      thisVersion.newProperties = newProperties
+    }
+  }
+
+  task("${projName}_releasePrepareReleaseVersion") {
+    description = "Prepare release version for ${projName}"
+    mustRunAfter releaseResolveVersions
+    releasePrepareReleaseVersions.dependsOn it
+    doLast {
+      def thisVersion = versionMap[projName]
+      project.logger.info 'storing release versions to {}', thisVersion.propertiesFile
+      def releaseProperties = new Properties() + thisVersion.releaseProperties
+      thisVersion.propertiesFile.withOutputStream { releaseProperties.store(it, null) }
+    }
+  }
+
+  task("${projName}_releaseCheckSnapshotDependencies", type: GradleBuild) {
+    description = "Check for snapshot dependencies before release of ${projName}"
+    mustRunAfter releasePrepareReleaseVersions
+    releaseCheckSnapshotDependencies.dependsOn it
+    dir = projFolder
+    tasks = [ 'checkSnapshotDependencies' ]
+  }
+  
+  if(projBuildTask)
+    projBuildTask.mustRunAfter releaseCheckSnapshotDependencies
+
+  task("${projName}_releaseBuild") {
+    description = "Build ${projName} for release"
+    mustRunAfter releaseCheckSnapshotDependencies
+    if(projBuildTask)
+      dependsOn projBuildTask
+    releaseBuild.dependsOn it
+  }
+
+  task("${projName}_releaseCreateReleaseTag") {
+    description = "Create release tag for ${projName}"
+    mustRunAfter releaseBuild
+    releaseCreateReleaseTags.dependsOn it
+    doLast {
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        def status = grgit.status()
+        if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+           status.staged.added || status.staged.modified || status.staged.removed) {
+          project.logger.info 'Committing changes before release tag for {}', projName
+          grgit.commit(all: true, message: "Release ${versionMap[projName].releaseVersion}", amend: false)
+        }
+        project.logger.info 'Creating release tag for {}', projName
+        grgit.tag.add(name: versionMap[projName].releaseVersion, message: "Release ${versionMap[projName].releaseVersion}", force: true)
+        project.logger.info 'Pushing release tag to upstream repository'
+        grgit.push(tags: true)          
+      } finally {
+        grgit.close()
+      }
+    }
+  }
+
+  task("${projName}_releasePrepareNewVersion") {
+    description = "Prepare new version for ${projName}"
+    mustRunAfter releaseCreateReleaseTags
+    releasePrepareNewVersions.dependsOn it
+    doLast {
+      def thisVersion = versionMap[projName]
+      project.logger.info 'storing new versions to {}', thisVersion.propertiesFile
+      def newProperties = new Properties() + thisVersion.newProperties
+      thisVersion.propertiesFile.withOutputStream { newProperties.store(it, null) }
+    }
+  }
+
+  task("${projName}_releaseCommitNewVersion") {
+    description = "Commit new version for ${projName}"
+    mustRunAfter releasePrepareNewVersions
+    releaseCommitNewVersions.dependsOn it
+    doLast {
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        def status = grgit.status()
+        if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+           status.staged.added || status.staged.modified || status.staged.removed) {
+          project.logger.info 'Committing new version for {}', projName
+          grgit.commit(all: true, message: "New version ${versionMap[projName].newVersion}", amend: false)
+          project.logger.info 'Pushing new version to upstream repository'
+          grgit.push()
+        }
+      } finally {
+        grgit.close()
+      }
+    }
+  }
+    
+} // first pass is over
 
 // second pass, now we handle inter-project dependencies
-for(def e in project.multiproject.projects) {
-  def projName = e.key
-  def proj = e.value
+project.multiproject.projects.each { projName, proj ->
   if(proj.dependsOn) {
     def thisProjUpdate = tasks.findByName("${projName}_update")
     def thisProjBuild = tasks.findByName("${projName}_build")
@@ -446,6 +687,7 @@ for(def e in project.multiproject.projects) {
     def thisProjBuildApps = tasks.findByName("${projName}_buildApps")
     def thisProjClean = tasks.findByName("${projName}_clean")
     def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
+    def thisProjReleaseBuild = tasks.findByName("${projName}_releaseBuild")
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = "${otherProj}_update"
       thisProjUpdate.dependsOn otherProjUpdate
@@ -478,6 +720,7 @@ for(def e in project.multiproject.projects) {
           thisProjClean.dependsOn otherProjUpdate
       }
       thisProjGitStatus.dependsOn "${otherProj}_gitStatus"
+      thisProjReleaseBuild.dependsOn "${otherProj}_releaseBuild"
     }
   }
 }
