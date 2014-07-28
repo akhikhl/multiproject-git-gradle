@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.22
+* @version 1.0.24
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -24,7 +24,6 @@ buildscript {
 }
 
 import org.ajoberstar.grgit.Grgit
-import org.ajoberstar.grgit.operation.*
 import java.util.regex.Matcher
 
 boolean isString(x) { 
@@ -40,11 +39,6 @@ def toCollection(obj) {
 }
 
 class Project extends Expando {
-
-  def releaseVersion
-  def newVersion
-  Boolean releaseNoCommit
-  Boolean releaseNoPush
 
   Project() {
   }
@@ -67,17 +61,17 @@ class Project extends Expando {
 }
 
 class MultiProjectExtension {
-  def hostProject
   String rootFolder
   def projects = [:]
   String gitBase
   String gitNameSeparator = '/'
   String gitNameSuffix = '.git'
-  def releaseVersion = [ /(\d+)([^\d]*$)/ : { Matcher m -> m.replaceAll(m[0][1]) } ]
-  def newVersion = [ /(\d+)([^\d]*$)/ : { Matcher m -> m.replaceAll("${ (m[0][1] as int) + 1 }${ m[0][2] }") } ]
+  def releaseVersion = [ /(\d+)([^\d]*$)/ : { m -> m.replaceAll(m[0][1]) } ]
+  def newVersion = [ /(\d+)([^\d]*$)/ : { m -> m.replaceAll("${ (m[0][1] as int) + 1 }${ m[0][2] }") } ]
   Boolean releaseNoCommit
   Boolean releaseNoPush
-  String branch
+  String branch = 'master'
+  Boolean failOnSnapshotDependencies
   
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
@@ -130,11 +124,16 @@ class MultiProjectExtension {
     else if(newVersion instanceof Map && proj.newVersion instanceof Map)
       proj.newVersion = newVersion + proj.newVersion
     if(proj.releaseNoCommit == null)
-      proj.releaseNoCommit = releaseNoCommit == null ? (hostProject.ext.has('releaseNoCommit') ? hostProject.ext.releaseNoCommit : false) : releaseNoCommit
+      proj.releaseNoCommit = releaseNoCommit
     if(proj.releaseNoPush == null)
-      proj.releaseNoPush = releaseNoPush == null ? (hostProject.ext.has('releaseNoPush') ? hostProject.ext.releaseNoPush : false) : releaseNoPush
+      proj.releaseNoPush = releaseNoPush
     if(proj.branch == null)
       proj.branch = branch
+    if(proj.failOnSnapshotDependencies == null) {
+      proj.failOnSnapshotDependencies = failOnSnapshotDependencies
+      if(proj.failOnSnapshotDependencies == null)
+        proj.failOnSnapshotDependencies = true
+    }
     projects[projName] = proj
   }
   
@@ -144,7 +143,6 @@ class MultiProjectExtension {
 }
 
 project.extensions.create 'multiproject', MultiProjectExtension
-multiproject.hostProject = project
   
 apply from: 'config.gradle'
 
@@ -210,9 +208,12 @@ def getVersionInfo = { String projName ->
 task ('afterRelease') {
   doLast {
     project.logger.warn 'Release is finished. The following repositories/projects were released:'
-    project.logger.warn '{}| {} | {} | {}', 'Repository'.padRight(16, ' '), 'Branch'.padRight(16, ' '), 'Release version'.padRight(16, ' '), 'New version'.padRight(16, ' ')
+    def pad = { String s, int length ->
+      (s ?: '').padRight(length, ' ')
+    }
+    project.logger.warn '{}| {} | {} | {}', pad('Repository', 16), pad('Branch', 16), pad('Release version', 16), pad('New version', 16)
     versionMap.each { projKey, versionInfo ->
-      project.logger.warn '{}| {} | {} | {}', versionInfo.originalProjectName.padRight(16, ' '), versionInfo.branch.padRight(16, ' '), versionInfo.releaseVersion.padRight(16, ' '), versionInfo.newVersion.padRight(16, ' ')
+      project.logger.warn '{}| {} | {} | {}', pad(versionInfo.originalProjectName, 16), pad(versionInfo.branch, 16), pad(versionInfo.releaseVersion, 16), pad(versionInfo.newVersion, 16)
     }
   }
 }
@@ -223,7 +224,7 @@ task('release') {
 }
 
 project.gradle.taskGraph.afterTask { Task task, TaskState state ->
-	if (state.failure && task.name =~ /(.+)_build/) {
+	if (state.failure && (task.name =~ /(.+)_build$/ || task.name =~ /(.+)_release(.+)$/)) {
     project.logger.error 'Release process failed, reverting back all changes:'
     versionMap.each { projKey, versionInfo ->
       project.logger.error ' reverting {}', versionInfo.propertiesFile
@@ -562,18 +563,20 @@ project.multiproject.projects.each { projName, proj ->
 		  propertiesFile.withInputStream { properties.load(it) }
 		  if(!properties.version)
         throw new GradleException("'version' property is not defined in ${propertiesFile}. Could not release.")
-		  String releaseVersion
+		  def releaseVersion
 		  if(proj.releaseVersion instanceof String)
 		    releaseVersion = proj.releaseVersion
 		  else if(proj.releaseVersion instanceof Map)
 		    for(def e in proj.releaseVersion) {
 		      def m = properties.version =~ e.key
 		      if(m) {
-            releaseVersion = e.value(m)		      
+            releaseVersion = e.value(m)
+            if(releaseVersion == null)
+              releaseVersion = properties.version
 		        break
 		      }
 		    }
-		  String newVersion
+		  def newVersion
 		  if(proj.newVersion instanceof String)
 		    newVersion = proj.newVersion
 		  else if(proj.newVersion instanceof Map)
@@ -581,6 +584,8 @@ project.multiproject.projects.each { projName, proj ->
 		      def m = properties.version =~ e.key
 		      if(m) {
             newVersion = e.value(m)		      
+            if(newVersion == null)
+              newVersion = properties.version
 		        break
 		      }
 		    }
@@ -633,6 +638,7 @@ project.multiproject.projects.each { projName, proj ->
     releaseCheckSnapshotDependencies.dependsOn it
     dir = projFolder
     tasks = [ 'checkSnapshotDependencies' ]
+    enabled = proj.failOnSnapshotDependencies as boolean
   }
   
   if(projBuildTask)
