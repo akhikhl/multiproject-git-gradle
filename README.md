@@ -511,6 +511,113 @@ multiproject {
 
 when releaseNoCommit=true, ARF does not commit nor push release and new versions.
 
+### Publishing to maven repositories
+
+Since version 1.0.25 multiproject-git-gradle supports publishing both to local maven repo and any remote maven repo (like artifactory). Below are the detailed instructions.
+
+#### Prerequisites
+
+- set of git repositories, each git repository contains one or more JVM-based projects
+
+- those projects, that are intended for publishing to local or remote maven repo, must have an instruction: 
+
+  ```groovy
+  apply plugin: 'maven'
+  ```
+
+#### Publishing to local maven repositories
+
+1. In "config.gradle": add releaseDeployTasks property to either multiproject element or to project element:
+
+```groovy
+multiproject {
+  releaseDeployTasks = ['install']
+  git baseDir: 'upstream_repos', {
+    project name: 'project1'
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ]
+  }
+}
+```
+
+2. Invoke on command line: `gradle release`.
+
+**Effect**: the release versions and new versions will be installed to local maven repo (~/.m2) after the commit to git. The exact sequence is:
+
+- prepare release version
+- commit release version to git
+- publish release version to local maven repo
+- prepare new version
+- commit new version to git
+- publish new version to local maven repo
+
+#### Publishing to remote maven repo (artifactory)
+
+1. In "config.gradle": add releaseDeployTasks property to either multiproject element or to project element:
+
+```groovy
+multiproject {
+  releaseDeployTasks = ['uploadArchives']
+  git baseDir: 'upstream_repos', {
+    project name: 'project1'
+    project name: 'project3'
+    project name: 'project2', dependsOn: [ 'project1', 'project3' ]
+  }
+}
+```
+
+2. Create new file "~/.gradle/init.d/deploy.gradle", insert code:
+
+```groovy
+rootProject {
+  ext {
+    artifactoryReleases = [ url: 'protocol-host-and-port/artifactory/libs-release-local', user: 'UploadUser', password : 'UploadPassword' ]
+    artifactorySnapshots = [ url: 'protocol-host-and-port/artifactory/libs-snapshot-local', user: 'UploadUser', password : 'UploadPassword' ]
+  }
+}
+
+afterProject { proj ->
+
+  if(proj.plugins.findPlugin('maven') && proj.uploadArchives instanceof org.gradle.api.tasks.Upload) {
+  
+    proj.configurations {
+      deployerJars
+    }
+
+    proj.dependencies {
+      deployerJars 'org.apache.maven.wagon:wagon-http:2.4'
+    }
+    
+    proj.uploadArchives {
+      repositories.mavenDeployer {
+        configuration = proj.configurations.deployerJars
+        if(proj.version.contains('-SNAPSHOT'))
+          repository(url: rootProject.ext.artifactorySnapshots.url) {
+            authentication(userName: rootProject.ext.artifactorySnapshots.user, password: rootProject.ext.artifactorySnapshots.password)
+          }
+        else
+          repository(url: rootProject.ext.artifactoryReleases.url) {
+            authentication(userName: rootProject.ext.artifactoryReleases.user, password: rootProject.ext.artifactoryReleases.password)
+          }
+      }
+    }
+  }
+}
+```
+
+where "protocol-host-and-port" should be replaced with concrete protocol, host and port of target maven repository, "UploadUser" should be replaced with an existing user and "UploadPassword" should be replaced with a valid password.
+
+3. Invoke on command line: `gradle release`.
+
+**Effect**: the release versions and new versions will be deployed to remote maven repo after the commit to git. The exact sequence is:
+
+- prepare release version
+- commit release version to git
+- publish release version to remote maven repo
+- prepare new version
+- commit new version to git
+- publish new version to remote maven repo
+
 ##Copyright and License
 
 Copyright 2013 (c) Andrey Hihlovskiy
@@ -521,3 +628,4 @@ All versions, present and past, of "multiproject-git-gradle" script are licensed
 
 You are encouraged to use it to whatever purpose and whichever way, all for free, provided that you retain copyright 
 notice at the beginning of the script.
+
