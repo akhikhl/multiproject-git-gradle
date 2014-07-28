@@ -38,10 +38,10 @@ which is used by multiproject-git-gradle.
   * [DSL for custom version increments](#dsl-for-custom-version-increments)
   * [releaseNoPush property](#releasenopush-property)
   * [releaseNoCommit property](#releasenocommit-property)
-* [Publishing to maven repositories](#publishing-to-maven-repositories)
-  * [Prerequisites](#prerequisites)
-  * [Publishing to local maven repo](#publishing-to-local-maven-repo)
-  * [Publishing to remote maven repo (artifactory)](#publishing-to-remote-maven-repo-artifactory)
+  * [Publishing to maven repositories](#publishing-to-maven-repositories)
+    * [Prerequisites](#prerequisites)
+    * [Publishing to local maven repo](#publishing-to-local-maven-repo)
+    * [Publishing to remote maven repo (artifactory)](#publishing-to-remote-maven-repo-artifactory)
 * [Copyright and License](#copyright-and-license)
 
 ##Required files
