@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.21
+* @version 1.0.22
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -24,6 +24,7 @@ buildscript {
 }
 
 import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.operation.*
 import java.util.regex.Matcher
 
 boolean isString(x) { 
@@ -208,10 +209,10 @@ def getVersionInfo = { String projName ->
 
 task ('afterRelease') {
   doLast {
-    project.logger.warn 'Release is finished. The following projects were released:'
-    project.logger.warn 'Project Name\t| Release Version\t| New Version'
+    project.logger.warn 'Release is finished. The following repositories/projects were released:'
+    project.logger.warn '{}| {} | {} | {}', 'Repository'.padRight(16, ' '), 'Branch'.padRight(16, ' '), 'Release version'.padRight(16, ' '), 'New version'.padRight(16, ' ')
     versionMap.each { projKey, versionInfo ->
-      project.logger.warn '{}\t| {}\t\t\t| {}', versionInfo.originalProjectName, versionInfo.releaseVersion, versionInfo.newVersion
+      project.logger.warn '{}| {} | {} | {}', versionInfo.originalProjectName.padRight(16, ' '), versionInfo.branch.padRight(16, ' '), versionInfo.releaseVersion.padRight(16, ' '), versionInfo.newVersion.padRight(16, ' ')
     }
   }
 }
@@ -273,16 +274,13 @@ project.multiproject.projects.each { projName, proj ->
         }
         if(new File(gitSource).exists())
           gitSource = new File(gitSource).toURI().toString()
+        def cloneOptions = [ dir: projFolder, uri: gitSource ]
         project.logger.warn '{} : cloning from {} to {}', projName, gitSource, projFolder
-        def grgit = Grgit.clone(dir: projFolder, uri: gitSource)
-        try {
-          if(proj.branch) {
-            project.logger.warn '{} : checking out branch {}', projName, proj.branch
-            grgit.checkout(branch: proj.branch, createBranch: true)
-          }
-        } finally {
-          grgit.close()
+        if(proj.branch) {
+          project.logger.warn '{} : checking out branch {}', projName, proj.branch
+          cloneOptions.refToCheckout = proj.branch
         }
+        Grgit.clone(cloneOptions).close()
         clonedRepositories.add(projName)
       }
     }
@@ -297,7 +295,16 @@ project.multiproject.projects.each { projName, proj ->
         try {
           if(proj.branch) {
             project.logger.warn '{} : checking out branch {}', projName, proj.branch
-            grgit.checkout(branch: proj.branch, createBranch: true)
+            if(grgit.branch.list().find { it.name == proj.branch })
+              grgit.checkout(branch: proj.branch)
+            else {
+		          def cmd = grgit.repository.jgit.checkout()
+		          cmd.name = proj.branch
+		          cmd.createBranch = true
+		          cmd.upstreamMode = org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode.SET_UPSTREAM
+		          cmd.startPoint = "origin/${proj.branch}"
+		          cmd.call()
+		        }
           }
           project.logger.warn '{} : pulling from origin', projName
           grgit.pull()
@@ -577,7 +584,7 @@ project.multiproject.projects.each { projName, proj ->
 		        break
 		      }
 		    }
-		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, propertiesFile: propertiesFile, originalProperties: properties, originalPropertiesText: propertiesFile.text, releaseVersion: releaseVersion, newVersion: newVersion ]
+		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, branch: proj.branch, propertiesFile: propertiesFile, originalProperties: properties, originalPropertiesText: propertiesFile.text, releaseVersion: releaseVersion, newVersion: newVersion ]
     }
   }
 
