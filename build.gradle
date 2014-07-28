@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.25
+* @version 1.0.26
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -162,46 +162,85 @@ if(project.ext.has('extraConfig')) {
 
 def rootFolder = (project.multiproject.rootFolder ? new File(project.projectDir, project.multiproject.rootFolder).canonicalFile : project.projectDir)
 
-task nuke
+task('nuke', group: 'cleanup') {
+  description = 'Deletes local git repositories listed in configuration.'
+}
 
-task maybeClone, {
+if(!tasks.findByName('clean'))
+  task('clean', group: 'cleanup') {
+    description = 'Cleans up compilation results and other temporary files.'
+  }
+
+clean.mustRunAfter { update }
+
+task('maybeClone', group: 'git') {
+  description = 'Clones repositories from upstream, if they do not exist.'
   mustRunAfter nuke
 }
 
-task update, dependsOn: maybeClone
+task('update', group: 'git') {
+  description = 'Pulls every git repository from upstream.'
+  dependsOn maybeClone
+}
 
-task build {
+task('gitBranchList', group: 'git') {
+  description = 'Prints a list of git branches in all git repositories.'
+}
+
+task('gitCommit', group: 'git') {
+  description = 'Commits changes (if any) in all git repositories.'
+}
+
+task('gitRevert', group: 'git') {
+  description = 'Reverts all changes in work directories of all git repositories.'
+}
+
+task('gitPush', group: 'git') {
+  description = 'Pushes current branches of all git repositories to upstream.'
+}
+
+task('gitStatus', group: 'git') {
+  description = 'Shows status of changed files in all git repositories.'
+}
+
+task('build', group: 'build') {
+  description = 'Builds projects in repositories.'
   dependsOn maybeClone
   mustRunAfter update
 }
 
-task buildApps, dependsOn: build
-task buildExamples, dependsOn: build
-task uploadArchives, dependsOn: build
-task gitBranchList
-task gitCommit
-task gitRevert
-task gitPush
-task gitStatus
+task('buildApps', group: 'build') {
+  description = 'Builds applications in repositories.'
+  dependsOn build
+}
 
-if(!tasks.findByName('clean'))
-  task clean
+task('buildExamples', group: 'build') {
+  description = 'Builds examples in repositories.'
+  dependsOn build
+}
 
-clean.mustRunAfter update
+task('uploadArchives', group: 'deployment') {
+  description = 'Uploads archives of all git repositories to remote maven repository.'
+  dependsOn build
+}
 
 // automated release feature ++
 
-task releaseChecks, dependsOn: update
-task releaseCollectVersions, dependsOn: releaseChecks
-task releaseResolveVersions, dependsOn: releaseCollectVersions
-task releasePrepareReleaseVersions, dependsOn: releaseResolveVersions
-task releaseCheckSnapshotDependencies, dependsOn: releasePrepareReleaseVersions
-task releaseBuild, dependsOn: releaseCheckSnapshotDependencies
-task releaseCreateReleaseTags, dependsOn: releaseBuild
-task releaseDeployReleaseVersions, dependsOn: releaseCreateReleaseTags
-task releasePrepareNewVersions, dependsOn: releaseDeployReleaseVersions
-task releaseCommitNewVersions, dependsOn: releasePrepareNewVersions
-task releaseDeployNewVersions, dependsOn: releaseCommitNewVersions
+task('releaseChecks', group: 'release') {
+  description = 'Performs checks before release.'
+  dependsOn update  
+}
+
+task('releaseCollectVersions', group: 'release') { dependsOn releaseChecks }
+task('releaseResolveVersions', group: 'release') { dependsOn releaseCollectVersions }
+task('releasePrepareReleaseVersions', group: 'release') { dependsOn releaseResolveVersions }
+task('releaseCheckSnapshotDependencies', group: 'release') { dependsOn releasePrepareReleaseVersions }
+task('releaseBuild', group: 'release') { dependsOn releaseCheckSnapshotDependencies }
+task('releaseCreateReleaseTags', group: 'release') { dependsOn releaseBuild }
+task('releaseDeployReleaseVersions', group: 'release') { dependsOn releaseCreateReleaseTags }
+task('releasePrepareNewVersions', group: 'release') { dependsOn releaseDeployReleaseVersions }
+task('releaseCommitNewVersions', group: 'release') { dependsOn releasePrepareNewVersions }
+task('releaseDeployNewVersions', group: 'release') { dependsOn releaseCommitNewVersions }
 
 Map versionMap = [:]
 
