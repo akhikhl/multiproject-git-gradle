@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.24
+* @version 1.0.25
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -72,6 +72,7 @@ class MultiProjectExtension {
   Boolean releaseNoPush
   String branch = 'master'
   Boolean failOnSnapshotDependencies
+  List releaseDeployTasks
   
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
@@ -134,6 +135,10 @@ class MultiProjectExtension {
       if(proj.failOnSnapshotDependencies == null)
         proj.failOnSnapshotDependencies = true
     }
+    if(!proj.releaseDeployTasks)
+      proj.releaseDeployTasks = releaseDeployTasks
+    else if(releaseDeployTasks instanceof List && proj.releaseDeployTasks instanceof List)
+      proj.releaseDeployTasks = releaseDeployTasks + proj.releaseDeployTasks
     projects[projName] = proj
   }
   
@@ -175,6 +180,7 @@ task buildExamples, dependsOn: build
 task uploadArchives, dependsOn: build
 task gitBranchList
 task gitCommit
+task gitRevert
 task gitPush
 task gitStatus
 
@@ -192,8 +198,10 @@ task releasePrepareReleaseVersions, dependsOn: releaseResolveVersions
 task releaseCheckSnapshotDependencies, dependsOn: releasePrepareReleaseVersions
 task releaseBuild, dependsOn: releaseCheckSnapshotDependencies
 task releaseCreateReleaseTags, dependsOn: releaseBuild
-task releasePrepareNewVersions, dependsOn: releaseCreateReleaseTags
+task releaseDeployReleaseVersions, dependsOn: releaseCreateReleaseTags
+task releasePrepareNewVersions, dependsOn: releaseDeployReleaseVersions
 task releaseCommitNewVersions, dependsOn: releasePrepareNewVersions
+task releaseDeployNewVersions, dependsOn: releaseCommitNewVersions
 
 Map versionMap = [:]
 
@@ -219,7 +227,7 @@ task ('afterRelease') {
 }
 
 task('release') {
-  dependsOn releaseCommitNewVersions
+  dependsOn releaseDeployNewVersions
   finalizedBy afterRelease
 }
 
@@ -517,12 +525,30 @@ project.multiproject.projects.each { projName, proj ->
         def status = grgit.status()
         if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
            status.staged.added || status.staged.modified || status.staged.removed) {
-          project.logger.info 'Committing changes'
+          project.logger.warn '{} : committing changes', projName
           grgit.commit(all: true, message: project.ext.message, amend: amend)
         }
       } finally {
         grgit.close()
       }    
+    }
+  }
+
+  task("${projName}_gitRevert") {
+    description = "git revert on ${projName}"
+    dependsOn maybeClone
+    mustRunAfter update
+    gitRevert.dependsOn it
+    doLast {
+      def grgit = Grgit.open(projFolder.absolutePath)
+      try {
+        project.logger.warn '{} : reverting changes', projName
+        def cmd = grgit.repository.jgit.checkout()
+        cmd.setAllPaths(true)
+        cmd.call()
+      } finally {
+        grgit.close()
+      }
     }
   }
 
@@ -535,6 +561,7 @@ project.multiproject.projects.each { projName, proj ->
     doLast {
       def grgit = Grgit.open(projFolder.absolutePath)
       try {
+        project.logger.warn '{} : pushing {} to origin', projName, proj.branch
         grgit.push()
       } finally {
         grgit.close()
@@ -683,10 +710,19 @@ project.multiproject.projects.each { projName, proj ->
       }
     }
   }
+  
+  task("${projName}_releaseDeployReleaseVersion", type: GradleBuild) {
+    description = "Deploys release version of ${projName}"
+    dependsOn releaseCreateReleaseTags
+    releaseDeployReleaseVersions.dependsOn it
+    enabled = proj.releaseDeployTasks as boolean
+    dir = projFolder
+    tasks = proj.releaseDeployTasks
+  }
 
   task("${projName}_releasePrepareNewVersion") {
     description = "Prepare new version for ${projName}"
-    dependsOn releaseCreateReleaseTags
+    dependsOn releaseDeployReleaseVersions
     releasePrepareNewVersions.dependsOn it
     doLast {
       def thisVersion = getVersionInfo(projName)
@@ -724,6 +760,15 @@ project.multiproject.projects.each { projName, proj ->
         grgit.close()
       }
     }
+  }
+  
+  task("${projName}_releaseDeployNewVersion", type: GradleBuild) {
+    description = "Deploys new version of ${projName}"
+    dependsOn releaseCommitNewVersions
+    releaseDeployNewVersions.dependsOn it
+    enabled = proj.releaseDeployTasks as boolean
+    dir = projFolder
+    tasks = proj.releaseDeployTasks
   }
 
 } // first pass is over
