@@ -528,6 +528,14 @@ Since version 1.0.25 multiproject-git-gradle supports publishing both to local m
   ```groovy
   apply plugin: 'maven'
   ```
+  
+  Note that applying maven plugin only at root project will not work in case of nested projects. You'll need to add `apply plugin: 'maven'` to every subproject that needs to be published. This can be automated via:
+  
+  ```groovy
+  subprojects {
+    apply plugin: 'maven'
+  }
+  ```
 
 #### Publishing to local maven repo
 
