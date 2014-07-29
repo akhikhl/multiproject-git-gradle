@@ -29,6 +29,7 @@ which is used by multiproject-git-gradle.
   * [Configuring build property](#configuring-build-property)
   * [Configuring apps property](#configuring-apps-property)
   * [Configuring examples property](#configuring-examples-property)
+  * [Configuring skipTests property](#configuring-skiptests-property)
 * [Automated Release Feature (ARF)](#automated-release-feature)
   * [ARF Requirements](#arf-requirements)
   * [How to start using ARF](#how-to-start-using-arf)
@@ -348,6 +349,20 @@ which will be run against the combined folder "$projectDir/examples".
 which will be run against the combined folder "$projectDir/$examples".
 
 * Otherwise "buildExamples" task is not defined for the given project.
+
+### Configuring skipTests property
+
+Boolean property skipTests allows to enable and disable unit-tests on all projects or individual projects:
+
+```groovy
+multiproject {
+  skipTests = true
+  project name: 'ProjectA'
+  project name: 'ProjectB', skipTests: false
+}
+```
+
+By default skipTests is globally set to false, i.e. unit-tests are enabled.
 
 ## Automated Release Feature
 
