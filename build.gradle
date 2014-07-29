@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.29
+* @version 1.0.30
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -287,10 +287,21 @@ task('release', group: 'release') {
 
 project.gradle.taskGraph.afterTask { Task task, TaskState state ->
 	if (state.failure && (task.name =~ /(.+)_build$/ || task.name =~ /(.+)_release(.+)$/)) {
-    project.logger.error 'Release process failed, reverting back all changes:'
+    project.logger.error 'Release process failed, reverting uncommitted changes:'
     versionMap.each { projKey, versionInfo ->
-      project.logger.error ' reverting {}', versionInfo.propertiesFile
-      versionInfo.propertiesFile.text = versionInfo.originalPropertiesText
+      def grgit = Grgit.open(versionInfo.projFolder.absolutePath)
+      try {
+        def status = grgit.status()
+        if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+           status.staged.added || status.staged.modified || status.staged.removed) {
+          project.logger.warn '{} : reverting changes', versionInfo.originalProjectName
+          def cmd = grgit.repository.jgit.checkout()
+          cmd.setAllPaths(true)
+          cmd.call()
+        }
+      } finally {
+        grgit.close()
+      }
     }
 	}
 }
@@ -682,7 +693,7 @@ project.multiproject.projects.each { projName, proj ->
 		        break
 		      }
 		    }
-		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, branch: proj.branch, propertiesFile: propertiesFile, originalProperties: properties, originalPropertiesText: propertiesFile.text, releaseVersion: releaseVersion, newVersion: newVersion ]
+		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, projFolder: projFolder, branch: proj.branch, propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
     }
   }
 
@@ -768,6 +779,7 @@ project.multiproject.projects.each { projName, proj ->
               project.logger.warn '{} : {} : releaseNoPush is set, will not be pushed to upstream repository', projName, thisVersion.releaseVersion
             else {
               project.logger.warn '{} : {} : pushing release version to upstream repository', projName, thisVersion.releaseVersion
+              grgit.push()
               grgit.push(tags: true)
             }
           }
