@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.31
+* @version 1.0.32
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -73,6 +73,7 @@ class MultiProjectExtension {
   String branch = 'master'
   Boolean failOnSnapshotDependencies
   List releaseDeployTasks = []
+  Boolean skipTests
   
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
@@ -139,6 +140,8 @@ class MultiProjectExtension {
       proj.releaseDeployTasks = releaseDeployTasks
     else if(releaseDeployTasks instanceof List && proj.releaseDeployTasks instanceof List)
       proj.releaseDeployTasks = releaseDeployTasks + proj.releaseDeployTasks
+    if(proj.skipTests == null)
+      proj.skipTests = skipTests
     projects[projName] = proj
   }
   
@@ -393,6 +396,8 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = proj.buildTasks ?: [ 'build' ]
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
     }
     projCleanTask = task("${projName}_clean", type: GradleBuild) {
       description = "Cleans the project $projName"
@@ -453,6 +458,8 @@ project.multiproject.projects.each { projName, proj ->
       buildExamples.dependsOn it
       dir = new File(projFolder, isString(proj.examples) ? proj.examples : 'examples')
       tasks = [ 'build' ]
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
     }
 
     task("${projName}_cleanExamples", type: GradleBuild) {
@@ -480,6 +487,8 @@ project.multiproject.projects.each { projName, proj ->
       buildApps.dependsOn it
       dir = new File(projFolder, isString(proj.apps) ? proj.apps : 'apps')
       tasks = [ 'build' ]
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
     }
 
     task("${projName}_cleanApps", type: GradleBuild) {
@@ -744,6 +753,8 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
     }
 
     task("${projName}_releaseCommitReleaseVersion") {
@@ -801,6 +812,8 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
     }
   
     task("${projName}_releaseCommitNewVersion") {
