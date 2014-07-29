@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.32
+* @version 1.0.33
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -219,9 +219,14 @@ task('uploadArchives', group: 'deployment') {
 
 // automated release feature ++
 
+task('releasePreBuild', group: 'release') {
+  description = 'Builds all git repositories before release.'
+  dependsOn update
+}
+
 task('releaseChecks', group: 'release') {
   description = 'Checks all git repositories before release.'
-  dependsOn update  
+  dependsOn releasePreBuild
 }
 
 task('releaseCollectVersions', group: 'release') { 
@@ -274,7 +279,7 @@ task ('afterRelease', group: 'release') {
 }
 
 project.gradle.taskGraph.afterTask { Task task, TaskState state ->
-	if (state.failure && (task.name =~ /(.+)_build$/ || task.name =~ /(.+)_release(.+)$/)) {
+	if (state.failure && task.name =~ /(.+)_release(.+)$/) {
     project.logger.error 'Release process failed, reverting uncommitted changes:'
     versionMap.each { projKey, versionInfo ->
       def grgit = Grgit.open(versionInfo.projFolder.absolutePath)
@@ -641,10 +646,28 @@ project.multiproject.projects.each { projName, proj ->
   }
 
   if(shouldBuild) {
+
+    task("${projName}_releasePreBuild", type: GradleBuild) {
+      description = "Builds project $projName before release"
+      dependsOn update
+      releasePreBuild.dependsOn it
+      if(buildSelfDefined)
+        dir = projFolder
+      else {
+        proj.build = proj.build.toString()
+        if(proj.build.endsWith('.gradle'))
+          buildFile = "$projFolder/${proj.build}"
+        else
+          dir = "$projFolder/${proj.build}"
+      }
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+      if(proj.skipTests)
+        startParameter.excludedTaskNames = [ 'test' ]
+    }
+    
     task("${projName}_releaseChecks", type: GradleBuild) {
       description = "Do checks before release of ${projName}"
-      dependsOn maybeClone
-      mustRunAfter update
+      dependsOn releasePreBuild
       releaseChecks.dependsOn it
       dir = projFolder
       tasks = [ 'checkCommitNeeded', 'checkUpdateNeeded' ]
@@ -858,6 +881,7 @@ project.multiproject.projects.each { projName, proj ->
     def thisProjClean = tasks.findByName("${projName}_clean")
     def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
     def thisProjReleaseBuildReleaseVersion = tasks.findByName("${projName}_releaseBuildReleaseVersion")
+    def thisProjReleasePreBuild = tasks.findByName("${projName}_releasePreBuild")
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = "${otherProj}_update"
       thisProjUpdate.dependsOn otherProjUpdate
@@ -891,6 +915,7 @@ project.multiproject.projects.each { projName, proj ->
       }
       thisProjGitStatus.dependsOn "${otherProj}_gitStatus"
       thisProjReleaseBuildReleaseVersion.dependsOn "${otherProj}_releaseCommitNewVersion"
+      thisProjReleasePreBuild.dependsOn "${otherProj}_releasePreBuild"
     }
   }
 }
