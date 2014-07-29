@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.27
+* @version 1.0.28
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -72,7 +72,7 @@ class MultiProjectExtension {
   Boolean releaseNoPush
   String branch = 'master'
   Boolean failOnSnapshotDependencies
-  List releaseDeployTasks
+  List releaseDeployTasks = []
   
   def git(Map options = [:], Closure closure) {
     def savedGitBase = gitBase
@@ -250,14 +250,9 @@ task('releaseCreateReleaseTags', group: 'release') {
   dependsOn releaseBuildReleaseVersions
 }
 
-task('releaseDeployReleaseVersions', group: 'release') { 
-  description = 'Deploys release versions to local or remote maven repository.'
-  dependsOn releaseCreateReleaseTags
-}
-
 task('releasePrepareNewVersions', group: 'release') { 
   description = 'Assigns new versions to all git repositories.'
-  dependsOn releaseDeployReleaseVersions
+  dependsOn releaseCreateReleaseTags
 }
 
 task('releaseBuildNewVersions', group: 'release') {
@@ -268,11 +263,6 @@ task('releaseBuildNewVersions', group: 'release') {
 task('releaseCommitNewVersions', group: 'release') {
   description = 'Commits new versions on all git repositories.'
   dependsOn releaseBuildNewVersions
-}
-
-task('releaseDeployNewVersions', group: 'release') {
-  description = 'Deploys new versions to local or remote maven repository.'
-  dependsOn releaseCommitNewVersions
 }
 
 Map versionMap = [:]
@@ -301,7 +291,7 @@ task ('afterRelease', group: 'release') {
 
 task('release', group: 'release') {
   description = 'Releases the software from all git repositories.'
-  dependsOn releaseDeployNewVersions
+  dependsOn releaseCommitNewVersions
   finalizedBy afterRelease
 }
 
@@ -768,7 +758,7 @@ project.multiproject.projects.each { projName, proj ->
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks.intersect(['install'])
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
     }
 
   task("${projName}_releaseCreateReleaseTag") {
@@ -802,19 +792,10 @@ project.multiproject.projects.each { projName, proj ->
       }
     }
   }
-  
-  task("${projName}_releaseDeployReleaseVersion", type: GradleBuild) {
-    description = "Deploys release version of ${projName}"
-    dependsOn releaseCreateReleaseTags
-    releaseDeployReleaseVersions.dependsOn it
-    enabled = (proj.releaseDeployTasks  - ['install']) as boolean
-    dir = projFolder
-    tasks = proj.releaseDeployTasks - ['install']    
-  }
 
   task("${projName}_releasePrepareNewVersion") {
     description = "Prepare new version for ${projName}"
-    dependsOn releaseDeployReleaseVersions
+    dependsOn releaseCreateReleaseTags
     releasePrepareNewVersions.dependsOn it
     doLast {
       def thisVersion = getVersionInfo(projName)
@@ -838,7 +819,7 @@ project.multiproject.projects.each { projName, proj ->
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks.intersect(['install'])
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
     }
 
   task("${projName}_releaseCommitNewVersion") {
@@ -869,15 +850,6 @@ project.multiproject.projects.each { projName, proj ->
         grgit.close()
       }
     }
-  }
-  
-  task("${projName}_releaseDeployNewVersion", type: GradleBuild) {
-    description = "Deploys new version of ${projName}"
-    dependsOn releaseCommitNewVersions
-    releaseDeployNewVersions.dependsOn it
-    enabled = (proj.releaseDeployTasks - ['install']) as boolean
-    dir = projFolder
-    tasks = proj.releaseDeployTasks - ['install']
   }
 
 } // first pass is over
