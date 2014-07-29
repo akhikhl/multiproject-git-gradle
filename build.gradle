@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.26
+* @version 1.0.27
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -209,16 +209,6 @@ task('build', group: 'build') {
   mustRunAfter update
 }
 
-task('buildApps', group: 'build') {
-  description = 'Builds applications in repositories.'
-  dependsOn build
-}
-
-task('buildExamples', group: 'build') {
-  description = 'Builds examples in repositories.'
-  dependsOn build
-}
-
 task('uploadArchives', group: 'deployment') {
   description = 'Uploads archives of all git repositories to remote maven repository.'
   dependsOn build
@@ -227,20 +217,63 @@ task('uploadArchives', group: 'deployment') {
 // automated release feature ++
 
 task('releaseChecks', group: 'release') {
-  description = 'Performs checks before release.'
+  description = 'Checks all git repositories before release.'
   dependsOn update  
 }
 
-task('releaseCollectVersions', group: 'release') { dependsOn releaseChecks }
-task('releaseResolveVersions', group: 'release') { dependsOn releaseCollectVersions }
-task('releasePrepareReleaseVersions', group: 'release') { dependsOn releaseResolveVersions }
-task('releaseCheckSnapshotDependencies', group: 'release') { dependsOn releasePrepareReleaseVersions }
-task('releaseBuild', group: 'release') { dependsOn releaseCheckSnapshotDependencies }
-task('releaseCreateReleaseTags', group: 'release') { dependsOn releaseBuild }
-task('releaseDeployReleaseVersions', group: 'release') { dependsOn releaseCreateReleaseTags }
-task('releasePrepareNewVersions', group: 'release') { dependsOn releaseDeployReleaseVersions }
-task('releaseCommitNewVersions', group: 'release') { dependsOn releasePrepareNewVersions }
-task('releaseDeployNewVersions', group: 'release') { dependsOn releaseCommitNewVersions }
+task('releaseCollectVersions', group: 'release') { 
+  description = 'Collects version information on all git repositories.'
+  dependsOn releaseChecks 
+}
+task('releaseResolveVersions', group: 'release') { 
+  description = 'Resolves version information on all git repositories.'
+  dependsOn releaseCollectVersions
+}
+
+task('releasePrepareReleaseVersions', group: 'release') { 
+  description = 'Assigns release versions to all git repositories.'
+  dependsOn releaseResolveVersions
+}
+
+task('releaseCheckSnapshotDependencies', group: 'release') {
+  description = 'Checks all git repositories for snapshot dependencies.'
+  dependsOn releasePrepareReleaseVersions
+}
+
+task('releaseBuildReleaseVersions', group: 'release') {
+  description = 'Builds release versions in all git repositories.'
+  dependsOn releaseCheckSnapshotDependencies 
+}
+
+task('releaseCreateReleaseTags', group: 'release') {
+  description = 'Commits and tags release versions on all git repositories.'
+  dependsOn releaseBuildReleaseVersions
+}
+
+task('releaseDeployReleaseVersions', group: 'release') { 
+  description = 'Deploys release versions to local or remote maven repository.'
+  dependsOn releaseCreateReleaseTags
+}
+
+task('releasePrepareNewVersions', group: 'release') { 
+  description = 'Assigns new versions to all git repositories.'
+  dependsOn releaseDeployReleaseVersions
+}
+
+task('releaseBuildNewVersions', group: 'release') {
+  description = 'Builds new versions in all git repositories.'
+  dependsOn releasePrepareNewVersions 
+}
+
+task('releaseCommitNewVersions', group: 'release') {
+  description = 'Commits new versions on all git repositories.'
+  dependsOn releaseBuildNewVersions
+}
+
+task('releaseDeployNewVersions', group: 'release') {
+  description = 'Deploys new versions to local or remote maven repository.'
+  dependsOn releaseCommitNewVersions
+}
 
 Map versionMap = [:]
 
@@ -252,7 +285,8 @@ def getVersionInfo = { String projName ->
   versionMap[getProjectKey(projName)]
 }
 
-task ('afterRelease') {
+task ('afterRelease', group: 'release') {
+  description = 'Prints report after release is finished.'
   doLast {
     project.logger.warn 'Release is finished. The following repositories/projects were released:'
     def pad = { String s, int length ->
@@ -265,7 +299,8 @@ task ('afterRelease') {
   }
 }
 
-task('release') {
+task('release', group: 'release') {
+  description = 'Releases the software from all git repositories.'
   dependsOn releaseDeployNewVersions
   finalizedBy afterRelease
 }
@@ -290,7 +325,6 @@ project.multiproject.projects.each { projName, proj ->
   File projFolder = new File(rootFolder, new File(projName).getName())
 
   task("${projName}_nuke") {
-    description = "deletes local repository ${projName}"
     nuke.dependsOn it
     doLast {
       project.logger.warn 'Deleting directory {}', projFolder
@@ -392,44 +426,51 @@ project.multiproject.projects.each { projName, proj ->
       dir = new File(projFolder, isString(proj.build) ? proj.build : '.')
       tasks = [ 'clean' ]
     }
-    if(proj.contribs) {
-      task("${projName}_installContribs", type: GradleBuild) {
-        description = "Installs contributions in project $projName"
-        dependsOn maybeClone
-        mustRunAfter update
-        projBuildTask.dependsOn it
-        if(isString(proj.contribs)) {
-          proj.contribs = proj.contribs as String
-          if(proj.contribs.endsWith('.gradle'))
-            buildFile = "$projFolder/${proj.build}"
-          else
-            dir = "$projFolder/${proj.contribs}"
-        }
+  }
+  
+  if(proj.contribs) {
+    task("${projName}_installContribs", type: GradleBuild) {
+      description = "Installs contributions in project $projName"
+      dependsOn maybeClone
+      mustRunAfter update
+      projBuildTask.dependsOn it
+      if(isString(proj.contribs)) {
+        proj.contribs = proj.contribs as String
+        if(proj.contribs.endsWith('.gradle'))
+          buildFile = "$projFolder/${proj.build}"
         else
-          dir = "$projFolder/contribs"
-        tasks = [ 'install' ]
+          dir = "$projFolder/${proj.contribs}"
       }
-      task("${projName}_cleanContribs", type: GradleBuild) {
-        description = "Cleans contributions in project $projName"
-        dependsOn maybeClone
-        mustRunAfter update
-        dependsOn projCleanTask
-        clean.dependsOn it
-        if(isString(proj.contribs)) {
-          proj.contribs = proj.contribs as String
-          if(proj.contribs.endsWith('.gradle'))
-            buildFile = "$projFolder/${proj.build}"
-          else
-            dir = "$projFolder/${proj.contribs}"
-        }
+      else
+        dir = "$projFolder/contribs"
+      tasks = [ 'install' ]
+    }
+    task("${projName}_cleanContribs", type: GradleBuild) {
+      description = "Cleans contributions in project $projName"
+      dependsOn maybeClone
+      mustRunAfter update
+      dependsOn projCleanTask
+      clean.dependsOn it
+      if(isString(proj.contribs)) {
+        proj.contribs = proj.contribs as String
+        if(proj.contribs.endsWith('.gradle'))
+          buildFile = "$projFolder/${proj.build}"
         else
-          dir = "$projFolder/contribs"
-        tasks = [ 'clean' ]
+          dir = "$projFolder/${proj.contribs}"
       }
+      else
+        dir = "$projFolder/contribs"
+      tasks = [ 'clean' ]
     }
   }
 
   if(proj.examples) {
+    if(!tasks.findByName('buildExamples'))
+      task('buildExamples', group: 'build') {
+        description = 'Builds examples in repositories.'
+        dependsOn build
+      }
+  
     task("${projName}_buildExamples", type: GradleBuild) {
       description = "Builds examples in project $projName"
       dependsOn build
@@ -451,6 +492,12 @@ project.multiproject.projects.each { projName, proj ->
   }
   
   if(proj.apps) {
+    if(!tasks.findByName('buildApps'))
+      task('buildApps', group: 'build') {
+        description = 'Builds applications in repositories.'
+        dependsOn build
+      }
+  
     task("${projName}_buildApps", type: GradleBuild) {
       description = "Builds applications in project $projName"
       dependsOn build
@@ -707,20 +754,26 @@ project.multiproject.projects.each { projName, proj ->
     enabled = proj.failOnSnapshotDependencies as boolean
   }
   
-  if(projBuildTask)
-    projBuildTask.mustRunAfter releaseCheckSnapshotDependencies
-
-  task("${projName}_releaseBuild") {
-    description = "Build ${projName} for release"
-    dependsOn releaseCheckSnapshotDependencies
-    if(projBuildTask)
-      dependsOn projBuildTask
-    releaseBuild.dependsOn it
-  }
+  if(shouldBuild)
+    task("${projName}_releaseBuildReleaseVersion", type: GradleBuild) {
+      description = "Builds release version of the project $projName"
+      dependsOn releaseCheckSnapshotDependencies
+      releaseBuildReleaseVersions.dependsOn it
+      if(buildSelfDefined)
+        dir = projFolder
+      else {
+        proj.build = proj.build.toString()
+        if(proj.build.endsWith('.gradle'))
+          buildFile = "$projFolder/${proj.build}"
+        else
+          dir = "$projFolder/${proj.build}"
+      }
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks.intersect(['install'])
+    }
 
   task("${projName}_releaseCreateReleaseTag") {
     description = "Create release tag for ${projName}"
-    dependsOn releaseBuild
+    dependsOn releaseBuildReleaseVersions
     releaseCreateReleaseTags.dependsOn it
     doLast {
       def thisVersion = getVersionInfo(projName)
@@ -754,9 +807,9 @@ project.multiproject.projects.each { projName, proj ->
     description = "Deploys release version of ${projName}"
     dependsOn releaseCreateReleaseTags
     releaseDeployReleaseVersions.dependsOn it
-    enabled = proj.releaseDeployTasks as boolean
+    enabled = (proj.releaseDeployTasks  - ['install']) as boolean
     dir = projFolder
-    tasks = proj.releaseDeployTasks
+    tasks = proj.releaseDeployTasks - ['install']    
   }
 
   task("${projName}_releasePrepareNewVersion") {
@@ -770,10 +823,27 @@ project.multiproject.projects.each { projName, proj ->
       thisVersion.propertiesFile.withOutputStream { newProperties.store(it, null) }
     }
   }
+  
+  if(shouldBuild)
+    task("${projName}_releaseBuildNewVersion", type: GradleBuild) {
+      description = "Builds new version of the project $projName"
+      dependsOn releasePrepareNewVersions
+      releaseBuildNewVersions.dependsOn it
+      if(buildSelfDefined)
+        dir = projFolder
+      else {
+        proj.build = proj.build.toString()
+        if(proj.build.endsWith('.gradle'))
+          buildFile = "$projFolder/${proj.build}"
+        else
+          dir = "$projFolder/${proj.build}"
+      }
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks.intersect(['install'])
+    }
 
   task("${projName}_releaseCommitNewVersion") {
     description = "Commit new version for ${projName}"
-    dependsOn releasePrepareNewVersions
+    dependsOn releaseBuildNewVersions
     releaseCommitNewVersions.dependsOn it
     doLast {
       def thisVersion = getVersionInfo(projName)
@@ -805,9 +875,9 @@ project.multiproject.projects.each { projName, proj ->
     description = "Deploys new version of ${projName}"
     dependsOn releaseCommitNewVersions
     releaseDeployNewVersions.dependsOn it
-    enabled = proj.releaseDeployTasks as boolean
+    enabled = (proj.releaseDeployTasks - ['install']) as boolean
     dir = projFolder
-    tasks = proj.releaseDeployTasks
+    tasks = proj.releaseDeployTasks - ['install']
   }
 
 } // first pass is over
@@ -821,7 +891,8 @@ project.multiproject.projects.each { projName, proj ->
     def thisProjBuildApps = tasks.findByName("${projName}_buildApps")
     def thisProjClean = tasks.findByName("${projName}_clean")
     def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
-    def thisProjReleaseBuild = tasks.findByName("${projName}_releaseBuild")
+    def thisProjReleaseBuildReleaseVersion = tasks.findByName("${projName}_releaseBuildReleaseVersion")
+    def thisProjReleaseBuildNewVersion = tasks.findByName("${projName}_releaseBuildNewVersion")
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = "${otherProj}_update"
       thisProjUpdate.dependsOn otherProjUpdate
@@ -854,7 +925,8 @@ project.multiproject.projects.each { projName, proj ->
           thisProjClean.dependsOn otherProjUpdate
       }
       thisProjGitStatus.dependsOn "${otherProj}_gitStatus"
-      thisProjReleaseBuild.dependsOn "${otherProj}_releaseBuild"
+      thisProjReleaseBuildReleaseVersion.dependsOn "${otherProj}_releaseBuildReleaseVersion"
+      thisProjReleaseBuildNewVersion.dependsOn "${otherProj}_releaseBuildNewVersion"
     }
   }
 }
