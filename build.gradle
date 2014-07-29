@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.30
+* @version 1.0.31
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -240,19 +240,10 @@ task('releaseCheckSnapshotDependencies', group: 'release') {
   dependsOn releasePrepareReleaseVersions
 }
 
-task('releaseBuildReleaseVersions', group: 'release') {
-  description = 'Builds release versions in all git repositories.'
-  dependsOn releaseCheckSnapshotDependencies 
-}
-
-task('releasePrepareNewVersions', group: 'release') { 
-  description = 'Assigns new versions to all git repositories.'
-  dependsOn releaseBuildReleaseVersions
-}
-
-task('releaseBuildNewVersions', group: 'release') {
-  description = 'Builds new versions in all git repositories.'
-  dependsOn releasePrepareNewVersions 
+task('release', group: 'release') {
+  description = 'Releases the software from all git repositories.'
+  dependsOn releaseCheckSnapshotDependencies
+  finalizedBy { afterRelease }
 }
 
 Map versionMap = [:]
@@ -277,12 +268,6 @@ task ('afterRelease', group: 'release') {
       project.logger.warn '{}| {} | {} | {}', pad(versionInfo.originalProjectName, 16), pad(versionInfo.branch, 16), pad(versionInfo.releaseVersion, 16), pad(versionInfo.newVersion, 16)
     }
   }
-}
-
-task('release', group: 'release') {
-  description = 'Releases the software from all git repositories.'
-  dependsOn releaseBuildNewVersions
-  finalizedBy afterRelease
 }
 
 project.gradle.taskGraph.afterTask { Task task, TaskState state ->
@@ -646,110 +631,109 @@ project.multiproject.projects.each { projName, proj ->
     }
   }
 
-  task("${projName}_releaseChecks", type: GradleBuild) {
-    description = "Do checks before release of ${projName}"
-    dependsOn maybeClone
-    mustRunAfter update
-    releaseChecks.dependsOn it
-    dir = projFolder
-    tasks = [ 'checkCommitNeeded', 'checkUpdateNeeded' ]
-  }
-
-  task("${projName}_releaseCollectVersions") {
-    description = "Collect versions before release of ${projName}"
-    dependsOn releaseChecks
-    releaseCollectVersions.dependsOn it
-    doLast {
-      File propertiesFile = new File(projFolder, 'gradle.properties')
-      if(!propertiesFile.exists())
-        throw new GradleException("File ${propertiesFile} does not exist. Could not release.")
-		  Properties properties = new Properties()
-		  propertiesFile.withInputStream { properties.load(it) }
-		  if(!properties.version)
-        throw new GradleException("'version' property is not defined in ${propertiesFile}. Could not release.")
-		  def releaseVersion
-		  if(proj.releaseVersion instanceof String)
-		    releaseVersion = proj.releaseVersion
-		  else if(proj.releaseVersion instanceof Map)
-		    for(def e in proj.releaseVersion) {
-		      def m = properties.version =~ e.key
-		      if(m) {
-            releaseVersion = e.value(m)
-            if(releaseVersion == null)
-              releaseVersion = properties.version
-		        break
-		      }
-		    }
-		  def newVersion
-		  if(proj.newVersion instanceof String)
-		    newVersion = proj.newVersion
-		  else if(proj.newVersion instanceof Map)
-		    for(def e in proj.newVersion) {
-		      def m = properties.version =~ e.key
-		      if(m) {
-            newVersion = e.value(m)		      
-            if(newVersion == null)
-              newVersion = properties.version
-		        break
-		      }
-		    }
-		  versionMap[getProjectKey(projName)] = [ originalProjectName: projName, projFolder: projFolder, branch: proj.branch, propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
+  if(shouldBuild) {
+    task("${projName}_releaseChecks", type: GradleBuild) {
+      description = "Do checks before release of ${projName}"
+      dependsOn maybeClone
+      mustRunAfter update
+      releaseChecks.dependsOn it
+      dir = projFolder
+      tasks = [ 'checkCommitNeeded', 'checkUpdateNeeded' ]
     }
-  }
 
-  task("${projName}_releaseResolveVersions") {
-    description = "Resolve versions before release of ${projName}"
-    dependsOn releaseCollectVersions
-    releaseResolveVersions.dependsOn it
-    doLast {
-      def thisVersion = getVersionInfo(projName)
-      def releaseProperties = [:] + thisVersion.originalProperties
-      releaseProperties.version = thisVersion.releaseVersion
-      def newProperties = [:] + thisVersion.originalProperties
-      newProperties.version = thisVersion.newVersion
-      thisVersion.originalProperties.each { key, value ->
-        def m = key =~ /(.+)_version$/
-        if(m) {
-          def otherProjName = m[0][1]
-          def otherProjVersion = getVersionInfo(otherProjName)
-          if(otherProjVersion) {
-            releaseProperties[key] = otherProjVersion.releaseVersion
-            newProperties[key] = otherProjVersion.newVersion
-          } else
-            project.logger.warn 'File {} contains property {} that refers to a non-existing project {}.', thisVersion.propertiesFile, key, otherProjName
-        }
+    task("${projName}_releaseCollectVersions") {
+      description = "Collect versions before release of ${projName}"
+      dependsOn releaseChecks
+      releaseCollectVersions.dependsOn it
+      doLast {
+        File propertiesFile = new File(projFolder, 'gradle.properties')
+        if(!propertiesFile.exists())
+          throw new GradleException("File ${propertiesFile} does not exist. Could not release.")
+		    Properties properties = new Properties()
+		    propertiesFile.withInputStream { properties.load(it) }
+		    if(!properties.version)
+          throw new GradleException("'version' property is not defined in ${propertiesFile}. Could not release.")
+		    def releaseVersion
+		    if(proj.releaseVersion instanceof String)
+		      releaseVersion = proj.releaseVersion
+		    else if(proj.releaseVersion instanceof Map)
+		      for(def e in proj.releaseVersion) {
+		        def m = properties.version =~ e.key
+		        if(m) {
+              releaseVersion = e.value(m)
+              if(releaseVersion == null)
+                releaseVersion = properties.version
+		          break
+		        }
+		      }
+		    def newVersion
+		    if(proj.newVersion instanceof String)
+		      newVersion = proj.newVersion
+		    else if(proj.newVersion instanceof Map)
+		      for(def e in proj.newVersion) {
+		        def m = properties.version =~ e.key
+		        if(m) {
+              newVersion = e.value(m)		      
+              if(newVersion == null)
+                newVersion = properties.version
+		          break
+		        }
+		      }
+		    versionMap[getProjectKey(projName)] = [ originalProjectName: projName, projFolder: projFolder, branch: proj.branch, propertiesFile: propertiesFile, originalProperties: properties, releaseVersion: releaseVersion, newVersion: newVersion ]
       }
-      thisVersion.releaseProperties = releaseProperties
-      thisVersion.newProperties = newProperties
     }
-  }
 
-  task("${projName}_releasePrepareReleaseVersion") {
-    description = "Prepare release version for ${projName}"
-    dependsOn releaseResolveVersions
-    releasePrepareReleaseVersions.dependsOn it
-    doLast {
-      def thisVersion = getVersionInfo(projName)
-      project.logger.warn '{} : {} : setting release version', projName, thisVersion.releaseVersion
-      def releaseProperties = new Properties() + thisVersion.releaseProperties
-      thisVersion.propertiesFile.withOutputStream { releaseProperties.store(it, null) }
+    task("${projName}_releaseResolveVersions") {
+      description = "Resolve versions before release of ${projName}"
+      dependsOn releaseCollectVersions
+      releaseResolveVersions.dependsOn it
+      doLast {
+        def thisVersion = getVersionInfo(projName)
+        def releaseProperties = [:] + thisVersion.originalProperties
+        releaseProperties.version = thisVersion.releaseVersion
+        def newProperties = [:] + thisVersion.originalProperties
+        newProperties.version = thisVersion.newVersion
+        thisVersion.originalProperties.each { key, value ->
+          def m = key =~ /(.+)_version$/
+          if(m) {
+            def otherProjName = m[0][1]
+            def otherProjVersion = getVersionInfo(otherProjName)
+            if(otherProjVersion) {
+              releaseProperties[key] = otherProjVersion.releaseVersion
+              newProperties[key] = otherProjVersion.newVersion
+            } else
+              project.logger.warn 'File {} contains property {} that refers to a non-existing project {}.', thisVersion.propertiesFile, key, otherProjName
+          }
+        }
+        thisVersion.releaseProperties = releaseProperties
+        thisVersion.newProperties = newProperties
+      }
     }
-  }
 
-  task("${projName}_releaseCheckSnapshotDependencies", type: GradleBuild) {
-    description = "Check for snapshot dependencies before release of ${projName}"
-    dependsOn releasePrepareReleaseVersions
-    releaseCheckSnapshotDependencies.dependsOn it
-    dir = projFolder
-    tasks = [ 'checkSnapshotDependencies' ]
-    enabled = proj.failOnSnapshotDependencies as boolean
-  }
-  
-  if(shouldBuild)
+    task("${projName}_releasePrepareReleaseVersion") {
+      description = "Prepare release version for ${projName}"
+      dependsOn releaseResolveVersions
+      releasePrepareReleaseVersions.dependsOn it
+      doLast {
+        def thisVersion = getVersionInfo(projName)
+        project.logger.warn '{} : {} : setting release version', projName, thisVersion.releaseVersion
+        def releaseProperties = new Properties() + thisVersion.releaseProperties
+        thisVersion.propertiesFile.withOutputStream { releaseProperties.store(it, null) }
+      }
+    }
+
+    task("${projName}_releaseCheckSnapshotDependencies", type: GradleBuild) {
+      description = "Check for snapshot dependencies before release of ${projName}"
+      dependsOn releasePrepareReleaseVersions
+      releaseCheckSnapshotDependencies.dependsOn it
+      dir = projFolder
+      tasks = [ 'checkSnapshotDependencies' ]
+      enabled = proj.failOnSnapshotDependencies as boolean
+    }
+
     task("${projName}_releaseBuildReleaseVersion", type: GradleBuild) {
       description = "Builds release version of the project $projName"
       dependsOn releaseCheckSnapshotDependencies
-      releaseBuildReleaseVersions.dependsOn it
       if(buildSelfDefined)
         dir = projFolder
       else {
@@ -760,6 +744,10 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+    }
+
+    task("${projName}_releaseCommitReleaseVersion") {
+      dependsOn "${projName}_releaseBuildReleaseVersion"
       doLast {
         def thisVersion = getVersionInfo(projName)
         def grgit = Grgit.open(projFolder.absolutePath)
@@ -789,23 +777,20 @@ project.multiproject.projects.each { projName, proj ->
       }
     }
 
-  task("${projName}_releasePrepareNewVersion") {
-    description = "Prepare new version for ${projName}"
-    dependsOn releaseBuildReleaseVersions
-    releasePrepareNewVersions.dependsOn it
-    doLast {
-      def thisVersion = getVersionInfo(projName)
-      project.logger.warn '{} : {} : setting new version', projName, thisVersion.newVersion
-      def newProperties = new Properties() + thisVersion.newProperties
-      thisVersion.propertiesFile.withOutputStream { newProperties.store(it, null) }
+    task("${projName}_releasePrepareNewVersion") {
+      description = "Prepare new version for ${projName}"
+      dependsOn "${projName}_releaseCommitReleaseVersion"
+      doLast {
+        def thisVersion = getVersionInfo(projName)
+        project.logger.warn '{} : {} : setting new version', projName, thisVersion.newVersion
+        def newProperties = new Properties() + thisVersion.newProperties
+        thisVersion.propertiesFile.withOutputStream { newProperties.store(it, null) }
+      }
     }
-  }
   
-  if(shouldBuild)
     task("${projName}_releaseBuildNewVersion", type: GradleBuild) {
       description = "Builds new version of the project $projName"
-      dependsOn releasePrepareNewVersions
-      releaseBuildNewVersions.dependsOn it
+      dependsOn "${projName}_releasePrepareNewVersion"
       if(buildSelfDefined)
         dir = projFolder
       else {
@@ -816,6 +801,11 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+    }
+  
+    task("${projName}_releaseCommitNewVersion") {
+      dependsOn "${projName}_releaseBuildNewVersion"
+      release.dependsOn it
       doLast {
         def thisVersion = getVersionInfo(projName)
         def grgit = Grgit.open(projFolder.absolutePath)
@@ -840,7 +830,8 @@ project.multiproject.projects.each { projName, proj ->
           grgit.close()
         }
       }
-    }
+    }    
+  } // shouldBuild
 
 } // first pass is over
 
@@ -854,7 +845,6 @@ project.multiproject.projects.each { projName, proj ->
     def thisProjClean = tasks.findByName("${projName}_clean")
     def thisProjGitStatus = tasks.findByName("${projName}_gitStatus")
     def thisProjReleaseBuildReleaseVersion = tasks.findByName("${projName}_releaseBuildReleaseVersion")
-    def thisProjReleaseBuildNewVersion = tasks.findByName("${projName}_releaseBuildNewVersion")
     toCollection(proj.dependsOn).each { otherProj ->
       def otherProjUpdate = "${otherProj}_update"
       thisProjUpdate.dependsOn otherProjUpdate
@@ -887,8 +877,7 @@ project.multiproject.projects.each { projName, proj ->
           thisProjClean.dependsOn otherProjUpdate
       }
       thisProjGitStatus.dependsOn "${otherProj}_gitStatus"
-      thisProjReleaseBuildReleaseVersion.dependsOn "${otherProj}_releaseBuildReleaseVersion"
-      thisProjReleaseBuildNewVersion.dependsOn "${otherProj}_releaseBuildNewVersion"
+      thisProjReleaseBuildReleaseVersion.dependsOn "${otherProj}_releaseCommitNewVersion"
     }
   }
 }
