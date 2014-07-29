@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.28
+* @version 1.0.29
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -245,24 +245,14 @@ task('releaseBuildReleaseVersions', group: 'release') {
   dependsOn releaseCheckSnapshotDependencies 
 }
 
-task('releaseCreateReleaseTags', group: 'release') {
-  description = 'Commits and tags release versions on all git repositories.'
-  dependsOn releaseBuildReleaseVersions
-}
-
 task('releasePrepareNewVersions', group: 'release') { 
   description = 'Assigns new versions to all git repositories.'
-  dependsOn releaseCreateReleaseTags
+  dependsOn releaseBuildReleaseVersions
 }
 
 task('releaseBuildNewVersions', group: 'release') {
   description = 'Builds new versions in all git repositories.'
   dependsOn releasePrepareNewVersions 
-}
-
-task('releaseCommitNewVersions', group: 'release') {
-  description = 'Commits new versions on all git repositories.'
-  dependsOn releaseBuildNewVersions
 }
 
 Map versionMap = [:]
@@ -291,7 +281,7 @@ task ('afterRelease', group: 'release') {
 
 task('release', group: 'release') {
   description = 'Releases the software from all git repositories.'
-  dependsOn releaseCommitNewVersions
+  dependsOn releaseBuildNewVersions
   finalizedBy afterRelease
 }
 
@@ -759,43 +749,37 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
-    }
-
-  task("${projName}_releaseCreateReleaseTag") {
-    description = "Create release tag for ${projName}"
-    dependsOn releaseBuildReleaseVersions
-    releaseCreateReleaseTags.dependsOn it
-    doLast {
-      def thisVersion = getVersionInfo(projName)
-      def grgit = Grgit.open(projFolder.absolutePath)
-      try {
-        if(proj.releaseNoCommit)
-          project.logger.warn '{} : {} : releaseNoCommit is set, will not be commited and/or pushed', projName, thisVersion.releaseVersion
-        else {
-          def status = grgit.status()
-          if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
-             status.staged.added || status.staged.modified || status.staged.removed) {
-            project.logger.warn '{} : {} : committing release version', projName, thisVersion.releaseVersion
-            grgit.commit(all: true, message: "Release ${thisVersion.releaseVersion}", amend: false)
-          }
-          project.logger.warn '{} : {} : creating release tag', projName, thisVersion.releaseVersion
-          grgit.tag.add(name: thisVersion.releaseVersion, message: "Release ${thisVersion.releaseVersion}", force: true)
-          if(proj.releaseNoPush)
-            project.logger.warn '{} : {} : releaseNoPush is set, will not be pushed to upstream repository', projName, thisVersion.releaseVersion
+      doLast {
+        def thisVersion = getVersionInfo(projName)
+        def grgit = Grgit.open(projFolder.absolutePath)
+        try {
+          if(proj.releaseNoCommit)
+            project.logger.warn '{} : {} : releaseNoCommit is set, will not be commited and/or pushed', projName, thisVersion.releaseVersion
           else {
-            project.logger.warn '{} : {} : pushing release version to upstream repository', projName, thisVersion.releaseVersion
-            grgit.push(tags: true)
+            def status = grgit.status()
+            if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+               status.staged.added || status.staged.modified || status.staged.removed) {
+              project.logger.warn '{} : {} : committing release version', projName, thisVersion.releaseVersion
+              grgit.commit(all: true, message: "Release ${thisVersion.releaseVersion}", amend: false)
+            }
+            project.logger.warn '{} : {} : creating release tag', projName, thisVersion.releaseVersion
+            grgit.tag.add(name: thisVersion.releaseVersion, message: "Release ${thisVersion.releaseVersion}", force: true)
+            if(proj.releaseNoPush)
+              project.logger.warn '{} : {} : releaseNoPush is set, will not be pushed to upstream repository', projName, thisVersion.releaseVersion
+            else {
+              project.logger.warn '{} : {} : pushing release version to upstream repository', projName, thisVersion.releaseVersion
+              grgit.push(tags: true)
+            }
           }
+        } finally {
+          grgit.close()
         }
-      } finally {
-        grgit.close()
       }
     }
-  }
 
   task("${projName}_releasePrepareNewVersion") {
     description = "Prepare new version for ${projName}"
-    dependsOn releaseCreateReleaseTags
+    dependsOn releaseBuildReleaseVersions
     releasePrepareNewVersions.dependsOn it
     doLast {
       def thisVersion = getVersionInfo(projName)
@@ -820,37 +804,31 @@ project.multiproject.projects.each { projName, proj ->
           dir = "$projFolder/${proj.build}"
       }
       tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
-    }
-
-  task("${projName}_releaseCommitNewVersion") {
-    description = "Commit new version for ${projName}"
-    dependsOn releaseBuildNewVersions
-    releaseCommitNewVersions.dependsOn it
-    doLast {
-      def thisVersion = getVersionInfo(projName)
-      def grgit = Grgit.open(projFolder.absolutePath)
-      try {
-        if(proj.releaseNoCommit)
-          project.logger.warn '{} : {} : releaseNoCommit is set, will not be commited and/or pushed', projName, thisVersion.newVersion
-        else {
-          def status = grgit.status()
-          if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
-             status.staged.added || status.staged.modified || status.staged.removed) {
-            project.logger.warn '{} : {} : committing new version', projName, thisVersion.newVersion
-            grgit.commit(all: true, message: "New version ${thisVersion.newVersion}", amend: false)
-            if(proj.releaseNoPush)
-              project.logger.warn '{} : {} : releaseNoPush is set, will not be pushed to upstream repository', projName, thisVersion.newVersion
-            else {
-              project.logger.warn '{} : {} : pushing new version to upstream repository', projName, thisVersion.newVersion
-              grgit.push()
+      doLast {
+        def thisVersion = getVersionInfo(projName)
+        def grgit = Grgit.open(projFolder.absolutePath)
+        try {
+          if(proj.releaseNoCommit)
+            project.logger.warn '{} : {} : releaseNoCommit is set, will not be commited and/or pushed', projName, thisVersion.newVersion
+          else {
+            def status = grgit.status()
+            if(status.unstaged.added || status.unstaged.modified || status.unstaged.removed || 
+               status.staged.added || status.staged.modified || status.staged.removed) {
+              project.logger.warn '{} : {} : committing new version', projName, thisVersion.newVersion
+              grgit.commit(all: true, message: "New version ${thisVersion.newVersion}", amend: false)
+              if(proj.releaseNoPush)
+                project.logger.warn '{} : {} : releaseNoPush is set, will not be pushed to upstream repository', projName, thisVersion.newVersion
+              else {
+                project.logger.warn '{} : {} : pushing new version to upstream repository', projName, thisVersion.newVersion
+                grgit.push()
+              }
             }
           }
+        } finally {
+          grgit.close()
         }
-      } finally {
-        grgit.close()
       }
     }
-  }
 
 } // first pass is over
 
