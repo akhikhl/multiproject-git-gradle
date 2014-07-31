@@ -8,7 +8,7 @@
 * Licensed under the MIT (http://opensource.org/licenses/MIT).
 *
 * @author Andrey Hihlovskiy
-* @version 1.0.32
+* @version 1.0.35
 * @requires gradle 1.11+, git 1.8+
 *
 * Full documentation and sources at:
@@ -72,7 +72,7 @@ class MultiProjectExtension {
   Boolean releaseNoPush
   String branch = 'master'
   Boolean failOnSnapshotDependencies
-  List releaseDeployTasks = []
+  List deployTasks = []
   Boolean skipTests
   
   def git(Map options = [:], Closure closure) {
@@ -136,10 +136,10 @@ class MultiProjectExtension {
       if(proj.failOnSnapshotDependencies == null)
         proj.failOnSnapshotDependencies = true
     }
-    if(!proj.releaseDeployTasks)
-      proj.releaseDeployTasks = releaseDeployTasks
-    else if(releaseDeployTasks instanceof List && proj.releaseDeployTasks instanceof List)
-      proj.releaseDeployTasks = releaseDeployTasks + proj.releaseDeployTasks
+    if(!proj.deployTasks)
+      proj.deployTasks = deployTasks
+    else if(deployTasks instanceof List && proj.deployTasks instanceof List)
+      proj.deployTasks = deployTasks + proj.deployTasks
     if(proj.skipTests == null)
       proj.skipTests = skipTests
     projects[projName] = proj
@@ -176,14 +176,26 @@ if(!tasks.findByName('clean'))
 
 clean.mustRunAfter { update }
 
+task('noupdate', group: 'git') {
+  description = 'Inhibits pulling or cloning git repositories from upstream.'
+  doLast {
+    tasks.each { 
+      if(it.name =~ /(.+)_maybeClone/ || it.name =~ /(.+)_update/)
+        it.enabled = false
+    }
+  }
+}
+
 task('maybeClone', group: 'git') {
   description = 'Clones repositories from upstream, if they do not exist.'
   mustRunAfter nuke
+  mustRunAfter noupdate
 }
 
 task('update', group: 'git') {
   description = 'Pulls every git repository from upstream.'
   dependsOn maybeClone
+  mustRunAfter noupdate
 }
 
 task('gitBranchList', group: 'git') {
@@ -314,7 +326,8 @@ project.multiproject.projects.each { projName, proj ->
   task("${projName}_maybeClone") {
     maybeClone.dependsOn it
     mustRunAfter nuke
-    doLast {
+    mustRunAfter noupdate
+    doLast {      
       if(!projFolder.exists()) {
         def gitSource
         if(proj.gitSource)
@@ -349,6 +362,7 @@ project.multiproject.projects.each { projName, proj ->
   
   task("${projName}_update") {
     dependsOn maybeClone
+    mustRunAfter noupdate
     update.dependsOn it
     doLast {
       if(!clonedRepositories.contains(projName)) {
@@ -395,7 +409,7 @@ project.multiproject.projects.each { projName, proj ->
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = proj.buildTasks ?: [ 'build' ]
+      tasks = proj.buildTasks ?: [ 'build' ] + proj.deployTasks
       if(proj.skipTests)
         startParameter.excludedTaskNames = [ 'test' ]
     }
@@ -752,7 +766,7 @@ project.multiproject.projects.each { projName, proj ->
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.deployTasks
       if(proj.skipTests)
         startParameter.excludedTaskNames = [ 'test' ]
     }
@@ -811,7 +825,7 @@ project.multiproject.projects.each { projName, proj ->
         else
           dir = "$projFolder/${proj.build}"
       }
-      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.releaseDeployTasks
+      tasks = (proj.buildTasks ?: [ 'build' ]) + proj.deployTasks
       if(proj.skipTests)
         startParameter.excludedTaskNames = [ 'test' ]
     }
